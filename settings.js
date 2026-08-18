@@ -211,27 +211,29 @@
     }
     grid.innerHTML = catalog.map((p) => {
       const version = p.version ? `v${esc(p.version)}` : '';
+      const isEnabled = p.enabled !== false;
+      const disabledAttr = isEnabled ? '' : 'disabled';
       const checks = (p.sessions || []).map((s) => {
         const key = `SHOW_${p.id}__${s}`;
         const checked = p.checked && p.checked[s] ? 'checked' : '';
         return `
           <label class="pv-session-check">
-            <input type="checkbox" name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" ${checked}>
+            <input type="checkbox" name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" ${checked} ${disabledAttr}>
             <span>${esc(SESSION_LABELS[s] || s)}</span>
           </label>`;
       }).join('');
       return `
-        <div class="pv-card">
+        <div class="pv-card${isEnabled ? '' : ' pv-card-disabled'}">
           <div class="pv-card-head">
             <h5 class="pv-card-title">${esc(p.name)}</h5>
             ${version ? `<span class="pv-card-version">${version}</span>` : ''}
           </div>
-          <div class="pv-card-id">${esc(p.id)}</div>
+          <div class="pv-card-id">${esc(p.id)}${isEnabled ? '' : ' · <span class="pv-card-badge">정지됨</span>'}</div>
           <div class="pv-card-sessions">${checks}</div>
         </div>`;
     }).join('');
 
-    grid.querySelectorAll('input[data-pv-plugin]').forEach((cb) => {
+    grid.querySelectorAll('input[data-pv-plugin]:not([disabled])').forEach((cb) => {
       cb.addEventListener('change', () => {
         const pid = cb.getAttribute('data-pv-plugin');
         const s = cb.getAttribute('data-pv-session');

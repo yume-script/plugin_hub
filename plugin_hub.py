@@ -185,7 +185,9 @@ def _is_plugin_enabled(p_id):
 
 
 def _discover_viewer_classes():
-    """category_tab 을 가진 (자신 제외, 정지되지 않은) 설치 플러그인 탐색 및 동적 디스크립터 바인딩."""
+    """category_tab 을 가진 (자신 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩.
+    정지(비활성) 플러그인도 포함해서 반환하되 enabled 플래그로 구분한다
+    (탭 목록에서는 제외하지만, 설정 카탈로그에서는 계속 보여주고 체크박스만 꺼둔 채로 노출하기 위함)."""
     viewers = []
     try:
         from plugins.metadata.base import BaseMetadataProvider
@@ -198,10 +200,6 @@ def _discover_viewer_classes():
             if not p_id or p_id == SELF_ID or p_id in seen:
                 continue
             seen.add(p_id)
-
-            # 정지(비활성)된 플러그인은 허브 탭/설정 카탈로그 모두에서 제외
-            if not _is_plugin_enabled(p_id):
-                continue
 
             orig_tab = None
             desc = None
@@ -225,7 +223,8 @@ def _discover_viewer_classes():
                 target_class.category_tab = _DynamicPluginCategoryTab(p_id, orig_tab)
 
             p_name = orig_tab.get("title") or getattr(target_class, "name", p_id)
-            viewers.append((p_id, p_name, _tab_sessions(orig_tab), target_class))
+            enabled = _is_plugin_enabled(p_id)
+            viewers.append((p_id, p_name, _tab_sessions(orig_tab), target_class, enabled))
     except Exception:
         pass
     return viewers
@@ -294,9 +293,7 @@ class _DynamicConfigSchema:
     def __get__(self, obj, objtype=None):
         _apply_session_overrides()
         schema = []
-        for p_id, p_name, sessions, _cls in _discover_viewer_classes():
-            for s in sessions:
-                label_session = _SESSION_LABELS.get(s, s)
+        for p_id, p_name, sessions, _cls, _enabled in _discover_viewer_classes():
                 schema.append(
                     {
                         "key": f"SHOW_{p_id}__{s}",
@@ -369,8 +366,13 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         config = _load_general_config()
         session = str(db_type or "general").strip().lower()
 
+        discovered = _discover_viewer_classes()
+
+        # 탭 목록: 정지된 플러그인은 제외
         tabs = []
-        for p_id, p_name, sessions, _cls in _discover_viewer_classes():
+        for p_id, p_name, sessions, _cls, enabled in discovered:
+            if not enabled:
+                continue
             picked = _unified_sessions_for(config, p_id, sessions)
             if session not in picked:
                 continue
@@ -386,15 +388,22 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
             )
         tabs = _sort_by_order(tabs, _session_order(config, session), "title")
 
+        # 설정 카탈로그: 정지된 플러그인도 목록에는 계속 노출하되, 체크는 강제로 꺼서 보여준다
+        # (저장된 SHOW_ 값 자체는 건드리지 않음 — 설정 화면에서 저장 버튼을 누르는 순간에만 실제로 꺼짐)
         catalog = []
-        for p_id, p_name, sessions, _cls in _discover_viewer_classes():
+        for p_id, p_name, sessions, _cls, enabled in discovered:
+            if enabled:
+                checked = {s: _is_on(config.get(f"SHOW_{p_id}__{s}", False)) for s in sessions}
+            else:
+                checked = {s: False for s in sessions}
             catalog.append(
                 {
                     "id": p_id,
                     "name": p_name,
                     "version": _read_plugin_version(p_id),
                     "sessions": sessions,
-                    "checked": {s: _is_on(config.get(f"SHOW_{p_id}__{s}", False)) for s in sessions},
+                    "checked": checked,
+                    "enabled": enabled,
                 }
             )
         catalog.sort(key=lambda x: x["name"].lower())

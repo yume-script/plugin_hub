@@ -48,6 +48,23 @@
   margin-bottom: 10px;
 }
 
+.pv-card-badge {
+  color: var(--bo-error, #e5484d);
+  font-weight: 600;
+}
+
+.pv-card-disabled {
+  opacity: 0.55;
+}
+
+.pv-card-disabled .pv-session-check {
+  cursor: not-allowed;
+}
+
+.pv-card-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
 .pv-card-sessions {
   display: flex;
   flex-wrap: wrap;
