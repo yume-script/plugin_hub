@@ -1,9 +1,14 @@
-<div class="ph-settings" data-ph-settings-root>
-  <p class="ph-settings-desc">
-    허브에 통합 표시할 플러그인과 보관함(세션)을 선택하세요.
+<div class="pv-settings">
+  <p class="pv-settings-desc">
+    플러그인 허브에 통합 표시할 플러그인과 보관함(세션)을 선택하세요.
+    체크하면 아래 세션별 레인에 칩이 추가되며, 칩을 드래그해 탭 순서를 바꾸거나 다른 세션으로 옮길 수 있습니다.
     하나라도 켜면 해당 플러그인의 개별 사이드바 탭은 자동으로 숨겨집니다 (전부 끄면 원복).
   </p>
-  <div class="ph-cards" data-role="cards">
-    <div class="ph-status" data-role="status">플러그인 목록을 불러오는 중...</div>
+  <div class="pv-grid" data-pv-role="grid">
+    <div class="pv-settings-empty">플러그인 목록을 불러오는 중...</div>
+  </div>
+  <div class="pv-lanes-wrap">
+    <h4 class="pv-lanes-heading">세션별 탭 순서</h4>
+    <div class="pv-lanes" data-pv-role="lanes"></div>
   </div>
 </div>

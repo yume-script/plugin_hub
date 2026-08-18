@@ -1,11 +1,11 @@
-.ph-plugin {
+.uf-plugin {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
 }
 
-.ph-tabsbar {
+.uf-tabsbar {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
   overflow-x: auto;
@@ -13,13 +13,13 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.ph-tabs {
+.uf-tabs {
   display: flex;
   gap: 4px;
   padding: 6px 8px 0;
 }
 
-.ph-tab {
+.uf-tab {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -35,40 +35,40 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.ph-tab:hover {
+.uf-tab:hover {
   background: var(--bo-hover-bg, rgba(255, 255, 255, 0.06));
   color: var(--bo-text-primary, #fff);
 }
 
-.ph-tab.active {
+.uf-tab.is-active {
   background: var(--bo-surface, rgba(255, 255, 255, 0.1));
   color: var(--bo-text-primary, #fff);
   font-weight: 600;
 }
 
-.ph-tab i {
+.uf-tab-icon {
   font-size: 13px;
   opacity: 0.9;
 }
 
-.ph-panes {
+.uf-panes {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   position: relative;
 }
 
-.ph-pane {
-  height: 100%;
-}
-
-.ph-status {
+.uf-status {
   padding: 40px 16px;
   text-align: center;
   color: var(--bo-text-secondary, #9a9a9a);
   font-size: 14px;
 }
 
-.ph-status.ph-error {
+.uf-status.is-error {
   color: var(--bo-error, #e5484d);
+}
+
+.uf-status.uf-hidden {
+  display: none;
 }

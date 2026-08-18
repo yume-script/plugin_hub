@@ -1,48 +1,60 @@
-.ph-settings-desc {
+.pv-settings-desc {
   margin: 0 0 16px;
   color: var(--bo-text-secondary, #9a9a9a);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-.ph-cards {
+/* ---- 카드 그리드 ---- */
+
+.pv-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
+  margin-bottom: 24px;
 }
 
-.ph-card {
+.pv-card {
   border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
   border-radius: 10px;
   padding: 14px;
   background: var(--bo-surface, rgba(255, 255, 255, 0.04));
 }
 
-.ph-card-head {
+.pv-card-head {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
-.ph-card-name {
+.pv-card-title {
+  margin: 0;
   font-weight: 600;
   font-size: 14px;
   color: var(--bo-text-primary, #fff);
 }
 
-.ph-card-meta {
-  font-size: 12px;
+.pv-card-version {
+  font-size: 11px;
   color: var(--bo-text-secondary, #9a9a9a);
+  white-space: nowrap;
 }
 
-.ph-card-sessions {
+.pv-card-id {
+  font-size: 11px;
+  color: var(--bo-text-secondary, #9a9a9a);
+  margin-bottom: 10px;
+}
+
+.pv-card-sessions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 16px;
 }
 
-.ph-check {
+.pv-session-check {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -51,16 +63,116 @@
   cursor: pointer;
 }
 
-.ph-check input {
+.pv-session-check input {
   cursor: pointer;
 }
 
-.ph-status {
+.pv-settings-empty,
+.pv-settings-error {
+  grid-column: 1 / -1;
   padding: 24px 4px;
   color: var(--bo-text-secondary, #9a9a9a);
   font-size: 13px;
 }
 
-.ph-status.ph-error {
+.pv-settings-error {
+  color: var(--bo-error, #e5484d);
+}
+
+/* ---- 세션 레인 ---- */
+
+.pv-lanes-wrap {
+  border-top: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  padding-top: 16px;
+}
+
+.pv-lanes-heading {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bo-text-primary, #fff);
+}
+
+.pv-lanes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.pv-lane {
+  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pv-lane-title {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-secondary, #9a9a9a);
+  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+}
+
+.pv-lane-body {
+  min-height: 56px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pv-lane-body.pv-lane-empty::before {
+  content: "표시된 플러그인 없음";
+  font-size: 12px;
+  color: var(--bo-text-secondary, #6b6b6b);
+  padding: 6px 2px;
+}
+
+.pv-lane-body.pv-drop-ok {
+  outline: 2px dashed var(--bo-accent, #7c5cff);
+  outline-offset: -2px;
+}
+
+.pv-lane-body.pv-drop-deny {
+  outline: 2px dashed var(--bo-error, #e5484d);
+  outline-offset: -2px;
+}
+
+.pv-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--bo-text-primary, #fff);
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+}
+
+.pv-chip.pv-dragging {
+  opacity: 0.4;
+}
+
+.pv-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-chip-x {
+  border: none;
+  background: transparent;
+  color: var(--bo-text-secondary, #9a9a9a);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.pv-chip-x:hover {
   color: var(--bo-error, #e5484d);
 }
