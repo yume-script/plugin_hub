@@ -158,17 +158,25 @@ class _DynamicPluginCategoryTab:
 
 
 def _is_plugin_enabled(p_id):
-    """코어 표준 계약: general 스코프의 PLUGIN_ENABLED_<id> 설정.
-    코어(metadata_factory.py)와 동일하게 '명시적으로 0이 저장된 경우에만 비활성'으로 판정한다.
-    설정이 아예 없거나(None), '1'이거나, 그 외 값이면 전부 활성으로 간주한다.
-    (default 파라미터가 실제로 반영되지 않는 게이트웨이 구현이 있을 수 있어,
-    값이 정확히 '0' 문자열일 때만 비활성으로 판정하는 쪽이 훨씬 안전하다.)
-    조회 자체가 실패해도 안전하게 활성으로 간주한다."""
+    """코어 표준 계약: general 스코프의 PLUGIN_ENABLED_<id> 설정 (PluginDatabaseGateway.get_setting 사용).
+
+    PluginDatabaseGateway.get_setting(key, default)은:
+      - 값이 DB에 있으면 {"value": <실제값>} 형태의 dict를 반환
+      - 값이 없으면 default 인자를 그대로(가공 없이) 반환
+    이 형태를 정확히 언랩해야 하며, 그냥 str()로 비교하면 dict 문자열과
+    비교하게 되어 절대 매치되지 않는다 (실제로 이 버그로 정지 판별이 항상 실패했었음).
+
+    코어(services/metadata_factory.py, plugin_service.py)와 동일하게
+    '명시적으로 0이 저장된 경우에만 비활성'으로 판정한다. 값이 없거나 '1'이거나
+    그 외 값이면 전부 활성으로 간주한다. 조회 자체가 실패해도 안전하게 활성으로 간주한다."""
     try:
         from services.plugin_db_gateway import PluginDatabaseGateway
 
         gw = PluginDatabaseGateway("general")
-        val = gw.get_setting(f"PLUGIN_ENABLED_{p_id}", default="1")
+        row = gw.get_setting(f"PLUGIN_ENABLED_{p_id}", default=None)
+        if row is None:
+            return True
+        val = row.get("value") if isinstance(row, dict) else row
         if val is None:
             return True
         return str(val).strip() != "0"
