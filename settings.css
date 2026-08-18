@@ -1,0 +1,66 @@
+.ph-settings-desc {
+  margin: 0 0 16px;
+  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ph-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.ph-card {
+  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+}
+
+.ph-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.ph-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--bo-text-primary, #fff);
+}
+
+.ph-card-meta {
+  font-size: 12px;
+  color: var(--bo-text-secondary, #9a9a9a);
+}
+
+.ph-card-sessions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.ph-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--bo-text-primary, #fff);
+  cursor: pointer;
+}
+
+.ph-check input {
+  cursor: pointer;
+}
+
+.ph-status {
+  padding: 24px 4px;
+  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 13px;
+}
+
+.ph-status.ph-error {
+  color: var(--bo-error, #e5484d);
+}
