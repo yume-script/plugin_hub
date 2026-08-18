@@ -158,14 +158,20 @@ class _DynamicPluginCategoryTab:
 
 
 def _is_plugin_enabled(p_id):
-    """코어 표준 계약: general 스코프의 PLUGIN_ENABLED_<id> 설정('1'=활성, 기본값 '1').
-    조회 실패 시에는 안전하게 활성으로 간주한다(코어 조회 오류로 탭이 통째로 사라지는 것을 방지)."""
+    """코어 표준 계약: general 스코프의 PLUGIN_ENABLED_<id> 설정.
+    코어(metadata_factory.py)와 동일하게 '명시적으로 0이 저장된 경우에만 비활성'으로 판정한다.
+    설정이 아예 없거나(None), '1'이거나, 그 외 값이면 전부 활성으로 간주한다.
+    (default 파라미터가 실제로 반영되지 않는 게이트웨이 구현이 있을 수 있어,
+    값이 정확히 '0' 문자열일 때만 비활성으로 판정하는 쪽이 훨씬 안전하다.)
+    조회 자체가 실패해도 안전하게 활성으로 간주한다."""
     try:
         from services.plugin_db_gateway import PluginDatabaseGateway
 
         gw = PluginDatabaseGateway("general")
         val = gw.get_setting(f"PLUGIN_ENABLED_{p_id}", default="1")
-        return str(val).strip() == "1"
+        if val is None:
+            return True
+        return str(val).strip() != "0"
     except Exception:
         return True
 
