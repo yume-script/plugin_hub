@@ -157,8 +157,21 @@ class _DynamicPluginCategoryTab:
         return self._orig
 
 
+def _is_plugin_enabled(p_id):
+    """코어 표준 계약: general 스코프의 PLUGIN_ENABLED_<id> 설정('1'=활성, 기본값 '1').
+    조회 실패 시에는 안전하게 활성으로 간주한다(코어 조회 오류로 탭이 통째로 사라지는 것을 방지)."""
+    try:
+        from services.plugin_db_gateway import PluginDatabaseGateway
+
+        gw = PluginDatabaseGateway("general")
+        val = gw.get_setting(f"PLUGIN_ENABLED_{p_id}", default="1")
+        return str(val).strip() == "1"
+    except Exception:
+        return True
+
+
 def _discover_viewer_classes():
-    """category_tab 을 가진 (자신 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩."""
+    """category_tab 을 가진 (자신 제외, 정지되지 않은) 설치 플러그인 탐색 및 동적 디스크립터 바인딩."""
     viewers = []
     try:
         from plugins.metadata.base import BaseMetadataProvider
@@ -171,6 +184,10 @@ def _discover_viewer_classes():
             if not p_id or p_id == SELF_ID or p_id in seen:
                 continue
             seen.add(p_id)
+
+            # 정지(비활성)된 플러그인은 허브 탭/설정 카탈로그 모두에서 제외
+            if not _is_plugin_enabled(p_id):
+                continue
 
             orig_tab = None
             desc = None
