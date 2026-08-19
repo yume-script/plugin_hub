@@ -33,16 +33,34 @@
   async function openHubSettings() {
     try {
       const categoryBtn = document.getElementById('category-settings');
-      if (categoryBtn) categoryBtn.click();
-    } catch (e) { /* noop */ }
-
-    // 설정 뷰가 그려질 때까지 대기 후 플러그인 탭으로 전환
-    await waitFor(() => document.getElementById('settings-tab-plugins'), 2000, 50);
-    try {
-      if (typeof window.switchSettingsTab === 'function') {
-        window.switchSettingsTab('plugins');
+      if (categoryBtn) {
+        categoryBtn.click();
+      } else {
+        console.warn('[PluginHub] #category-settings 를 찾지 못함');
       }
-    } catch (e) { /* noop */ }
+    } catch (e) {
+      console.error('[PluginHub] category-settings 클릭 실패', e);
+    }
+
+    // "settings-tab-plugins"는 초기 페이지 로드 시부터 display:none으로 이미 DOM에
+    // 존재하므로 그 존재 여부로는 설정 뷰가 실제로 열렸는지 알 수 없다. 대신 실제
+    // 탭 버튼(.settings-tab-btn)과 window.switchSettingsTab 둘 다 준비될 때까지 기다렸다가,
+    // 버튼이 있으면 진짜 클릭을 시뮬레이션해 코어의 클릭 핸들러 부수효과(카드 목록 로드 등)까지
+    // 그대로 태운다. window.switchSettingsTab은 설정 뷰를 처음 열 때 비로소 바인딩될 수 있어
+    // category-settings 클릭 이후에도 즉시 존재를 보장할 수 없으므로 별도로 폴링한다.
+    const [tabBtn, switchFn] = await Promise.all([
+      waitFor(() => document.querySelector('.settings-tab-btn[data-settings-tab="plugins"]'), 3000, 50),
+      waitFor(() => (typeof window.switchSettingsTab === 'function' ? window.switchSettingsTab : null), 3000, 50),
+    ]);
+    if (tabBtn) {
+      console.debug('[PluginHub] 플러그인 설정 탭 버튼 클릭');
+      tabBtn.click();
+    } else if (switchFn) {
+      console.debug('[PluginHub] window.switchSettingsTab("plugins") 직접 호출');
+      switchFn('plugins');
+    } else {
+      console.warn('[PluginHub] 플러그인 설정 탭 버튼/함수 둘 다 못 찾음 (타임아웃)');
+    }
 
     // 플러그인 카드 목록이 비동기로 그려지므로 우리 카드가 나타날 때까지 대기
     const header = await waitFor(
@@ -50,14 +68,19 @@
       4000,
       100
     );
-    if (!header) return;
+    if (!header) {
+      console.warn('[PluginHub] plugin_hub 설정 카드를 찾지 못함 (타임아웃)');
+      return;
+    }
     header.scrollIntoView({ behavior: 'smooth', block: 'center' });
     try {
       const body = document.querySelector(`[data-plugin-body="${SELF_ID}"]`);
       if (body && getComputedStyle(body).display === 'none') {
         header.click();
       }
-    } catch (e) { /* noop */ }
+    } catch (e) {
+      console.error('[PluginHub] 카드 펼치기 실패', e);
+    }
   }
 
   if (settingsBtn) {
