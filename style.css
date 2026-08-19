@@ -25,11 +25,12 @@
 }
 
 .uf-settings-btn {
+  /* 자동 이동 로직이 아직 불안정해서 당분간 숨김 처리 (코드는 유지) */
+  display: none;
   flex: 0 0 auto;
   margin-right: 8px;
   width: 30px;
   height: 30px;
-  display: flex;
   align-items: center;
   justify-content: center;
   border: none;
