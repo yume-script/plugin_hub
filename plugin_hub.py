@@ -294,6 +294,8 @@ class _DynamicConfigSchema:
         _apply_session_overrides()
         schema = []
         for p_id, p_name, sessions, _cls, _enabled in _discover_viewer_classes():
+            for s in sessions:
+                label_session = _SESSION_LABELS.get(s, s)
                 schema.append(
                     {
                         "key": f"SHOW_{p_id}__{s}",
