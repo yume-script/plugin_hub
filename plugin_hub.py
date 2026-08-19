@@ -390,14 +390,14 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
             )
         tabs = _sort_by_order(tabs, _session_order(config, session), "title")
 
-        # 설정 카탈로그: 정지된 플러그인도 목록에는 계속 노출하되, 체크는 강제로 꺼서 보여준다
-        # (저장된 SHOW_ 값 자체는 건드리지 않음 — 설정 화면에서 저장 버튼을 누르는 순간에만 실제로 꺼짐)
+        # 설정 카탈로그: 정지된 플러그인도 목록에는 계속 노출한다.
+        # 체크 값은 항상 "실제 저장된 값" 그대로 보여준다(강제 언체크 금지) — save-config API가
+        # 전체 config JSON을 통째로 덮어쓰는 방식이라, 여기서 강제로 false를 보여주면
+        # 사용자가 저장 버튼을 누르는 순간 원래 선택값이 영구 소실된다. 대신 프론트(settings.js)에서
+        # enabled=False인 카드는 체크박스 클릭만 막아(값은 유지) 재설정 없이도 다시 켜면 그대로 복원되게 한다.
         catalog = []
         for p_id, p_name, sessions, _cls, enabled in discovered:
-            if enabled:
-                checked = {s: _is_on(config.get(f"SHOW_{p_id}__{s}", False)) for s in sessions}
-            else:
-                checked = {s: False for s in sessions}
+            checked = {s: _is_on(config.get(f"SHOW_{p_id}__{s}", False)) for s in sessions}
             catalog.append(
                 {
                     "id": p_id,

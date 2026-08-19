@@ -194,8 +194,10 @@
     });
 
     // 체크된 플러그인을 저장된 순서 → 나머지 이름순으로 레인에 채움
+    // 레인(탭 순서 시각화)에는 "실제로 지금 탭에 뜨는" 것만 넣는다 — 정지된 플러그인은
+    // 체크는 유지되지만(재활성화 시 자동 복원용) 지금 탭으로 뜨지 않으므로 레인에선 제외.
     SESSIONS.forEach((s) => {
-      const checkedIds = catalog.filter((p) => p.checked && p.checked[s]).map((p) => p.id);
+      const checkedIds = catalog.filter((p) => p.enabled !== false && p.checked && p.checked[s]).map((p) => p.id);
       const order = Array.isArray(orders && orders[s]) ? orders[s] : [];
       const sorted = order.filter((id) => checkedIds.includes(id))
         .concat(checkedIds.filter((id) => !order.includes(id)));
@@ -212,13 +214,15 @@
     grid.innerHTML = catalog.map((p) => {
       const version = p.version ? `v${esc(p.version)}` : '';
       const isEnabled = p.enabled !== false;
-      const disabledAttr = isEnabled ? '' : 'disabled';
       const checks = (p.sessions || []).map((s) => {
         const key = `SHOW_${p.id}__${s}`;
         const checked = p.checked && p.checked[s] ? 'checked' : '';
+        // 정지된 플러그인도 name/checked는 그대로 둔다 — save-config가 config 전체를
+        // 덮어쓰는 방식이라, 여기서 값을 지우거나 disabled로 빼면 저장 시 원래 선택이
+        // 영구 소실된다. 대신 클릭만 JS로 막아서(readOnly 흉내) 값은 항상 보존되게 한다.
         return `
-          <label class="pv-session-check">
-            <input type="checkbox" name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" ${checked} ${disabledAttr}>
+          <label class="pv-session-check${isEnabled ? '' : ' pv-session-check-locked'}">
+            <input type="checkbox" name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" data-pv-locked="${isEnabled ? '0' : '1'}" ${checked}>
             <span>${esc(SESSION_LABELS[s] || s)}</span>
           </label>`;
       }).join('');
@@ -233,8 +237,15 @@
         </div>`;
     }).join('');
 
-    grid.querySelectorAll('input[data-pv-plugin]:not([disabled])').forEach((cb) => {
+    grid.querySelectorAll('input[data-pv-plugin]').forEach((cb) => {
+      // 잠긴(정지된 플러그인) 체크박스는 클릭 자체를 막아 값이 항상 유지되게 한다.
+      cb.addEventListener('click', (e) => {
+        if (cb.getAttribute('data-pv-locked') === '1') {
+          e.preventDefault();
+        }
+      });
       cb.addEventListener('change', () => {
+        if (cb.getAttribute('data-pv-locked') === '1') return;
         const pid = cb.getAttribute('data-pv-plugin');
         const s = cb.getAttribute('data-pv-session');
         if (cb.checked) addChip(pid, s);
