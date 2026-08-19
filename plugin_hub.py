@@ -107,6 +107,21 @@ def _unified_sessions_for(config, p_id, sessions):
     return picked
 
 
+_DEFAULT_EXCLUDED_IDS = "bookoasis_plugins_viewer"
+
+
+def _excluded_ids(config):
+    """설정에 저장된 제외 플러그인 id 목록(EXCLUDED_IDS: 콤마 구분).
+    키 자체가 아직 저장된 적이 없으면(한 번도 저장 안 함) 기본값으로 원본
+    '플러그인 모아보기'(bookoasis_plugins_viewer)를 제외한다 — 허브 안에
+    또 다른 통합 뷰어(허브)가 탭으로 들어가는 걸 막기 위함. 저장 화면에서
+    빈 문자열로 명시적으로 저장하면(키는 존재, 값만 빈 문자열) 제외 없음으로 취급된다."""
+    raw = config.get("EXCLUDED_IDS", _DEFAULT_EXCLUDED_IDS)
+    if not isinstance(raw, str):
+        return set()
+    return {s.strip() for s in raw.split(",") if s.strip()}
+
+
 def _current_request_session():
     """Flask request context에서 현재 요청 세션(db_type)을 추출한다."""
     try:
@@ -185,19 +200,23 @@ def _is_plugin_enabled(p_id):
 
 
 def _discover_viewer_classes():
-    """category_tab 을 가진 (자신 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩.
+    """category_tab 을 가진 (자신 제외, 설정에서 제외 처리된 id 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩.
     정지(비활성) 플러그인도 포함해서 반환하되 enabled 플래그로 구분한다
-    (탭 목록에서는 제외하지만, 설정 카탈로그에서는 계속 보여주고 체크박스만 꺼둔 채로 노출하기 위함)."""
+    (탭 목록에서는 제외하지만, 설정 카탈로그에서는 계속 보여주고 체크박스만 꺼둔 채로 노출하기 위함).
+    단, EXCLUDED_IDS 에 든 id는 카탈로그에도 아예 나타나지 않는다(원본 '플러그인 모아보기' 등)."""
     viewers = []
     try:
         from plugins.metadata.base import BaseMetadataProvider
+
+        config = _load_general_config()
+        excluded = _excluded_ids(config)
 
         seen = set()
         for target_class in BaseMetadataProvider.__subclasses__():
             if not target_class:
                 continue
             p_id = getattr(target_class, "id", None)
-            if not p_id or p_id == SELF_ID or p_id in seen:
+            if not p_id or p_id == SELF_ID or p_id in seen or p_id in excluded:
                 continue
             seen.add(p_id)
 
@@ -411,8 +430,15 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         catalog.sort(key=lambda x: x["name"].lower())
 
         orders = {s: _session_order(config, s) for s in _SESSION_LABELS}
+        excluded_ids_str = str(config.get("EXCLUDED_IDS", _DEFAULT_EXCLUDED_IDS))
 
-        return {"success": True, "viewers": tabs, "catalog": catalog, "orders": orders}
+        return {
+            "success": True,
+            "viewers": tabs,
+            "catalog": catalog,
+            "orders": orders,
+            "excluded_ids": excluded_ids_str,
+        }
 
 
 # 검증기 통과용 리터럴 선언을 런타임 동적 디스크립터로 교체

@@ -13,6 +13,7 @@
   const SESSIONS = Object.keys(SESSION_LABELS);
   const grid = root.querySelector('[data-pv-role="grid"]');
   const lanesEl = root.querySelector('[data-pv-role="lanes"]');
+  const excludedInput = root.querySelector('[data-pv-role="excluded-input"]');
   if (!grid || !lanesEl) return;
 
   let catalogById = {};
@@ -301,6 +302,9 @@
       ensureOrderInputs();
       renderCards(catalog);
       renderLanes(catalog, data.orders || {});
+      if (excludedInput && typeof data.excluded_ids === 'string') {
+        excludedInput.value = data.excluded_ids;
+      }
     } catch (err) {
       console.error('[PluginHub-Settings] load error:', err);
       grid.innerHTML = `<div class="pv-settings-error">플러그인 목록을 불러오지 못했습니다: ${esc(err.message || '오류')}</div>`;

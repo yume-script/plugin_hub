@@ -193,3 +193,38 @@
 .pv-chip-x:hover {
   color: var(--bo-error, #e5484d);
 }
+
+/* ---- 제외 플러그인 목록 ---- */
+
+.pv-excluded-wrap {
+  border-top: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.pv-excluded-desc {
+  margin-bottom: 8px;
+}
+
+.pv-excluded-desc code {
+  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.pv-excluded-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  color: var(--bo-text-primary, #fff);
+  font-size: 13px;
+}
+
+.pv-excluded-input:focus {
+  outline: none;
+  border-color: var(--bo-accent, #7c5cff);
+}

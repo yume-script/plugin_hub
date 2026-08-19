@@ -13,4 +13,12 @@
     <h4 class="pv-lanes-heading">세션별 탭 순서</h4>
     <div class="pv-lanes" data-pv-role="lanes"></div>
   </div>
+  <div class="pv-excluded-wrap">
+    <h4 class="pv-lanes-heading">목록에서 제외할 플러그인</h4>
+    <p class="pv-settings-desc pv-excluded-desc">
+      쉼표(,)로 구분한 플러그인 고유 ID. 여기 적힌 플러그인은 허브의 카드 목록/탭 후보에 아예 나타나지 않습니다.
+      기본값은 <code>bookoasis_plugins_viewer</code>(플러그인 모아보기) — 허브 안에 또 다른 통합 뷰어가 들어가는 걸 막기 위함입니다.
+    </p>
+    <input type="text" class="pv-excluded-input" name="EXCLUDED_IDS" data-pv-role="excluded-input" placeholder="예: bookoasis_plugins_viewer, some_other_plugin_id">
+  </div>
 </div>
