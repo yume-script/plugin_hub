@@ -8,15 +8,42 @@
 .uf-tabsbar {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .uf-tabs {
   display: flex;
   gap: 4px;
   padding: 6px 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+.uf-settings-btn {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bo-text-secondary, #9a9a9a);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.uf-settings-btn:hover {
+  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--bo-text-primary, #fff);
 }
 
 .uf-tab {

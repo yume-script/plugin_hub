@@ -9,10 +9,62 @@
   const tabsEl = $('tabs');
   const panesEl = $('panes');
   const statusEl = $('status');
+  const settingsBtn = $('open-settings');
 
   let plugins = [];
   let activeId = null;
   const bundleCache = new Map();
+
+  // 사이드바 "환경설정" → 플러그인 탭 전환 → 이 플러그인 카드 아코디언 펼치기까지
+  // 실제 코어 클릭 경로를 그대로 재현한다(엘리먼트가 비동기로 그려지므로 폴링으로 대기).
+  function waitFor(check, timeoutMs, intervalMs) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const tick = () => {
+        const el = check();
+        if (el) return resolve(el);
+        if (Date.now() - start >= timeoutMs) return resolve(null);
+        setTimeout(tick, intervalMs);
+      };
+      tick();
+    });
+  }
+
+  async function openHubSettings() {
+    try {
+      const categoryBtn = document.getElementById('category-settings');
+      if (categoryBtn) categoryBtn.click();
+    } catch (e) { /* noop */ }
+
+    // 설정 뷰가 그려질 때까지 대기 후 플러그인 탭으로 전환
+    await waitFor(() => document.getElementById('settings-tab-plugins'), 2000, 50);
+    try {
+      if (typeof window.switchSettingsTab === 'function') {
+        window.switchSettingsTab('plugins');
+      }
+    } catch (e) { /* noop */ }
+
+    // 플러그인 카드 목록이 비동기로 그려지므로 우리 카드가 나타날 때까지 대기
+    const header = await waitFor(
+      () => document.querySelector(`[data-role="plugin-card-toggle"][data-plugin-id="${SELF_ID}"]`),
+      4000,
+      100
+    );
+    if (!header) return;
+    header.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try {
+      const body = document.querySelector(`[data-plugin-body="${SELF_ID}"]`);
+      if (body && getComputedStyle(body).display === 'none') {
+        header.click();
+      }
+    } catch (e) { /* noop */ }
+  }
+
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      openHubSettings();
+    });
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
