@@ -14,6 +14,8 @@
   const grid = root.querySelector('[data-pv-role="grid"]');
   const lanesEl = root.querySelector('[data-pv-role="lanes"]');
   const excludedInput = root.querySelector('[data-pv-role="excluded-input"]');
+  const selectAllBtn = root.querySelector('[data-pv-role="select-all"]');
+  const deselectAllBtn = root.querySelector('[data-pv-role="deselect-all"]');
   if (!grid || !lanesEl) return;
 
   let catalogById = {};
@@ -253,6 +255,26 @@
         else removeChip(pid, s);
       });
     });
+  }
+
+  // 일괄 선택/해제: 잠긴(정지된 플러그인) 체크박스는 값이 보존돼야 하므로 건드리지 않는다.
+  function bulkSetAll(checkedValue) {
+    grid.querySelectorAll('input[data-pv-plugin]').forEach((cb) => {
+      if (cb.getAttribute('data-pv-locked') === '1') return;
+      if (cb.checked === checkedValue) return;
+      cb.checked = checkedValue;
+      const pid = cb.getAttribute('data-pv-plugin');
+      const s = cb.getAttribute('data-pv-session');
+      if (checkedValue) addChip(pid, s);
+      else removeChip(pid, s);
+    });
+  }
+
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => bulkSetAll(true));
+  }
+  if (deselectAllBtn) {
+    deselectAllBtn.addEventListener('click', () => bulkSetAll(false));
   }
 
   function refreshOnlyViewerTabs() {
