@@ -271,10 +271,18 @@
   }
 
   if (selectAllBtn) {
-    selectAllBtn.addEventListener('click', () => bulkSetAll(true));
+    selectAllBtn.addEventListener('click', () => {
+      if (window.confirm('현재 목록에 보이는 모든(잠기지 않은) 플러그인을 전부 켭니다. 계속할까요?')) {
+        bulkSetAll(true);
+      }
+    });
   }
   if (deselectAllBtn) {
-    deselectAllBtn.addEventListener('click', () => bulkSetAll(false));
+    deselectAllBtn.addEventListener('click', () => {
+      if (window.confirm('현재 목록에 보이는 모든(잠기지 않은) 플러그인을 전부 끕니다. 저장을 누르면 기존 선택이 사라집니다. 계속할까요?')) {
+        bulkSetAll(false);
+      }
+    });
   }
 
   function refreshOnlyViewerTabs() {
