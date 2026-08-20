@@ -40,22 +40,46 @@ def _self_installed():
 
 
 def _load_general_config(force_refresh=False):
-    """모든 세션 DB(general, adult, audiobook, video)에 저장된 플러그인 설정을 표준 gateway를 통해 실시간으로 읽어 병합한다."""
-    merged = {}
+    """4개 세션 DB(general/adult/audiobook/video) 중 PLUGIN_CONFIG_plugin_hub가
+    가장 최근에 저장(updated_at 최신)된 DB의 설정을 통째로 사용한다.
+
+    코어 저장 API(save-config)는 항상 전체 config 스냅샷을 통째로 덮어쓰고,
+    그 스냅샷이 어느 DB(general/adult/...)에 쓰이는지는 저장 당시 관리자가 보고 있던
+    라이브러리 세션(state.currentLibraryType)에 따라 달라진다. 예전에는 4개 DB를
+    무조건 general→adult→audiobook→video 순서로 키 단위 병합했는데, 이러면 "최신 저장"이
+    아니라 그냥 "반복문에서 나중에 도는 DB"가 항상 이겨버려서, 예를 들어 예전에 audiobook
+    세션에서 저장했던 오래된 값이 방금 general 세션에서 한 새 저장을 덮어써버리는 버그가 있었다.
+    updated_at 타임스탬프를 직접 비교해 진짜 최신 저장을 골라야 한다."""
     try:
         from services.plugin_db_gateway import PluginDatabaseGateway
-
-        for session in ("general", "adult", "audiobook", "video"):
-            try:
-                gw = PluginDatabaseGateway(session)
-                data = gw.get_plugin_config(SELF_ID)
-                if isinstance(data, dict):
-                    merged.update(data)
-            except Exception:
-                pass
     except Exception:
-        pass
-    return merged
+        return {}
+
+    best_data = {}
+    best_ts = None
+    for session in ("general", "adult", "audiobook", "video"):
+        try:
+            gw = PluginDatabaseGateway(session)
+            row = gw.fetch_one(
+                "SELECT `value`, `updated_at` FROM settings WHERE `key` = ?",
+                (f"PLUGIN_CONFIG_{SELF_ID}",),
+            )
+            if not row:
+                continue
+            raw_val = row["value"]
+            raw_ts = row["updated_at"]
+            try:
+                data = json.loads(raw_val)
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if best_ts is None or (raw_ts is not None and raw_ts >= best_ts):
+                best_ts = raw_ts
+                best_data = data
+        except Exception:
+            continue
+    return best_data
 
 
 def _tab_sessions(tab):
