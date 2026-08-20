@@ -3,9 +3,30 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+}
+
+.uf-header {
   /* BookOasis 상단에 항상 떠 있는 고정 세션 전환 네비게이션과 겹치지 않도록
-     탭 바를 그만큼 아래로 밀어냄. 겹치는 높이가 다르면 이 값만 조절하면 됨. */
-  padding-top: 48px;
+     그 높이만큼의 타이틀 바를 대신 채워 넣음. 겹치는 높이가 다르면 height만 조절하면 됨. */
+  flex: 0 0 auto;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+}
+
+.uf-header-icon {
+  color: #a855f7;
+  font-size: 1.05rem;
+}
+
+.uf-header-title {
+  color: var(--bo-text-primary, #fff);
+  font-weight: 700;
+  font-size: 1.1rem;
 }
 
 .uf-tabsbar {
