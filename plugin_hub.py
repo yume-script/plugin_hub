@@ -158,6 +158,15 @@ class _DynamicPluginCategoryTab:
             config = _load_general_config()
             sessions = _tab_sessions(self._orig)
             req_session = _current_request_session()
+            req_path = "?"
+            req_qs = "?"
+            if self.plugin_id == "bookoasis_wolf":
+                try:
+                    from flask import request as _flask_req
+                    req_path = _flask_req.path
+                    req_qs = _flask_req.query_string.decode("utf-8", "ignore")
+                except Exception:
+                    pass
             decision = "show(fallthrough)"
             if req_session:
                 if req_session in sessions and _is_on(
@@ -165,17 +174,17 @@ class _DynamicPluginCategoryTab:
                 ):
                     decision = "hide(req_session)"
                     if self.plugin_id == "bookoasis_wolf":
-                        print(f"[PluginHub-DEBUG] {self.plugin_id}: req_session={req_session} sessions={sessions} decision={decision}", flush=True)
+                        print(f"[PluginHub-DEBUG] {self.plugin_id}: path={req_path}?{req_qs} req_session={req_session} sessions={sessions} decision={decision}", flush=True)
                     return None
             else:
                 picked = _unified_sessions_for(config, self.plugin_id, sessions)
                 if picked and len(picked) == len(sessions):
                     decision = "hide(all_sessions_picked)"
                     if self.plugin_id == "bookoasis_wolf":
-                        print(f"[PluginHub-DEBUG] {self.plugin_id}: req_session=None sessions={sessions} picked={picked} decision={decision}", flush=True)
+                        print(f"[PluginHub-DEBUG] {self.plugin_id}: path={req_path}?{req_qs} req_session=None sessions={sessions} picked={picked} decision={decision}", flush=True)
                     return None
             if self.plugin_id == "bookoasis_wolf":
-                print(f"[PluginHub-DEBUG] {self.plugin_id}: req_session={req_session!r} sessions={sessions} "
+                print(f"[PluginHub-DEBUG] {self.plugin_id}: path={req_path}?{req_qs} req_session={req_session!r} sessions={sessions} "
                       f"SHOW_key={'SHOW_' + self.plugin_id + '__' + str(req_session)} "
                       f"config_val={config.get('SHOW_' + self.plugin_id + '__' + str(req_session)) if req_session else None} "
                       f"decision={decision}", flush=True)
@@ -240,9 +249,6 @@ def _discover_viewer_classes():
             if not target_class:
                 continue
             p_id = getattr(target_class, "id", None)
-            if p_id == "bookoasis_wolf":
-                print(f"[PluginHub-DEBUG] discover: found class={target_class!r} id={p_id!r} "
-                      f"in_seen={p_id in seen} in_excluded={p_id in excluded}", flush=True)
             if not p_id or p_id == SELF_ID or p_id in seen or p_id in excluded:
                 continue
             seen.add(p_id)
@@ -269,10 +275,6 @@ def _discover_viewer_classes():
             # 모든 카테고리 뷰어 플러그인의 category_tab을 _DynamicPluginCategoryTab으로 감싸기
             if not isinstance(desc, _DynamicPluginCategoryTab):
                 target_class.category_tab = _DynamicPluginCategoryTab(p_id, orig_tab)
-                if p_id == "bookoasis_wolf":
-                    print(f"[PluginHub-DEBUG] {p_id}: category_tab 을 _DynamicPluginCategoryTab 으로 새로 래핑함", flush=True)
-            elif p_id == "bookoasis_wolf":
-                print(f"[PluginHub-DEBUG] {p_id}: 이미 래핑되어 있음 (재사용)", flush=True)
 
             p_name = orig_tab.get("title") or getattr(target_class, "name", p_id)
             enabled = _is_plugin_enabled(p_id)
