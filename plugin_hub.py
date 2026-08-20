@@ -158,17 +158,32 @@ class _DynamicPluginCategoryTab:
             config = _load_general_config()
             sessions = _tab_sessions(self._orig)
             req_session = _current_request_session()
+            decision = "show(fallthrough)"
             if req_session:
                 if req_session in sessions and _is_on(
                     config.get(f"SHOW_{self.plugin_id}__{req_session}", False)
                 ):
+                    decision = "hide(req_session)"
+                    if self.plugin_id == "bookoasis_wolf":
+                        print(f"[PluginHub-DEBUG] {self.plugin_id}: req_session={req_session} sessions={sessions} decision={decision}", flush=True)
                     return None
             else:
                 picked = _unified_sessions_for(config, self.plugin_id, sessions)
                 if picked and len(picked) == len(sessions):
+                    decision = "hide(all_sessions_picked)"
+                    if self.plugin_id == "bookoasis_wolf":
+                        print(f"[PluginHub-DEBUG] {self.plugin_id}: req_session=None sessions={sessions} picked={picked} decision={decision}", flush=True)
                     return None
-        except Exception:
-            pass
+            if self.plugin_id == "bookoasis_wolf":
+                print(f"[PluginHub-DEBUG] {self.plugin_id}: req_session={req_session!r} sessions={sessions} "
+                      f"SHOW_key={'SHOW_' + self.plugin_id + '__' + str(req_session)} "
+                      f"config_val={config.get('SHOW_' + self.plugin_id + '__' + str(req_session)) if req_session else None} "
+                      f"decision={decision}", flush=True)
+        except Exception as e:
+            if self.plugin_id == "bookoasis_wolf":
+                import traceback
+                print(f"[PluginHub-DEBUG] {self.plugin_id}: EXCEPTION {e!r}", flush=True)
+                traceback.print_exc()
         return self._orig
 
 
@@ -203,19 +218,31 @@ def _discover_viewer_classes():
     """category_tab 을 가진 (자신 제외, 설정에서 제외 처리된 id 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩.
     정지(비활성) 플러그인도 포함해서 반환하되 enabled 플래그로 구분한다
     (탭 목록에서는 제외하지만, 설정 카탈로그에서는 계속 보여주고 체크박스만 꺼둔 채로 노출하기 위함).
-    단, EXCLUDED_IDS 에 든 id는 카탈로그에도 아예 나타나지 않는다(원본 '플러그인 모아보기' 등)."""
+    단, EXCLUDED_IDS 에 든 id는 카탈로그에도 아예 나타나지 않는다(원본 '플러그인 모아보기' 등).
+
+    각 플러그인 처리는 개별 try/except로 감싼다 — 예전에는 for 루프 전체가 하나의
+    try/except였는데, 그러면 특정 플러그인 하나 처리 중 예외가 나면 그 뒤 순서의
+    플러그인들은 통째로 처리가 안 되고 건너뛰어지는 문제가 있었다."""
     viewers = []
     try:
         from plugins.metadata.base import BaseMetadataProvider
 
         config = _load_general_config()
         excluded = _excluded_ids(config)
+        all_subclasses = BaseMetadataProvider.__subclasses__()
+    except Exception as e:
+        print(f"[PluginHub-DEBUG] _discover_viewer_classes 초기화 실패: {e!r}", flush=True)
+        return viewers
 
-        seen = set()
-        for target_class in BaseMetadataProvider.__subclasses__():
+    seen = set()
+    for target_class in all_subclasses:
+        try:
             if not target_class:
                 continue
             p_id = getattr(target_class, "id", None)
+            if p_id == "bookoasis_wolf":
+                print(f"[PluginHub-DEBUG] discover: found class={target_class!r} id={p_id!r} "
+                      f"in_seen={p_id in seen} in_excluded={p_id in excluded}", flush=True)
             if not p_id or p_id == SELF_ID or p_id in seen or p_id in excluded:
                 continue
             seen.add(p_id)
@@ -233,6 +260,8 @@ def _discover_viewer_classes():
                 if isinstance(raw_tab, dict):
                     orig_tab = raw_tab
             if not isinstance(orig_tab, dict):
+                if p_id == "bookoasis_wolf":
+                    print(f"[PluginHub-DEBUG] {p_id}: orig_tab 을 dict로 못 구함 (desc={desc!r})", flush=True)
                 continue
 
             _ORIG_TABS[p_id] = orig_tab
@@ -240,12 +269,17 @@ def _discover_viewer_classes():
             # 모든 카테고리 뷰어 플러그인의 category_tab을 _DynamicPluginCategoryTab으로 감싸기
             if not isinstance(desc, _DynamicPluginCategoryTab):
                 target_class.category_tab = _DynamicPluginCategoryTab(p_id, orig_tab)
+                if p_id == "bookoasis_wolf":
+                    print(f"[PluginHub-DEBUG] {p_id}: category_tab 을 _DynamicPluginCategoryTab 으로 새로 래핑함", flush=True)
+            elif p_id == "bookoasis_wolf":
+                print(f"[PluginHub-DEBUG] {p_id}: 이미 래핑되어 있음 (재사용)", flush=True)
 
             p_name = orig_tab.get("title") or getattr(target_class, "name", p_id)
             enabled = _is_plugin_enabled(p_id)
             viewers.append((p_id, p_name, _tab_sessions(orig_tab), target_class, enabled))
-    except Exception:
-        pass
+        except Exception as e:
+            print(f"[PluginHub-DEBUG] 플러그인 처리 중 예외 (target_class={target_class!r}): {e!r}", flush=True)
+            continue
     return viewers
 
 
