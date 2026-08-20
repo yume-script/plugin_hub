@@ -158,41 +158,17 @@ class _DynamicPluginCategoryTab:
             config = _load_general_config()
             sessions = _tab_sessions(self._orig)
             req_session = _current_request_session()
-            req_path = "?"
-            req_qs = "?"
-            if self.plugin_id == "bookoasis_wolf":
-                try:
-                    from flask import request as _flask_req
-                    req_path = _flask_req.path
-                    req_qs = _flask_req.query_string.decode("utf-8", "ignore")
-                except Exception:
-                    pass
-            decision = "show(fallthrough)"
             if req_session:
                 if req_session in sessions and _is_on(
                     config.get(f"SHOW_{self.plugin_id}__{req_session}", False)
                 ):
-                    decision = "hide(req_session)"
-                    if self.plugin_id == "bookoasis_wolf":
-                        print(f"[PluginHub-DEBUG] {self.plugin_id}: path={req_path}?{req_qs} req_session={req_session} sessions={sessions} decision={decision}", flush=True)
                     return None
             else:
                 picked = _unified_sessions_for(config, self.plugin_id, sessions)
                 if picked and len(picked) == len(sessions):
-                    decision = "hide(all_sessions_picked)"
-                    if self.plugin_id == "bookoasis_wolf":
-                        print(f"[PluginHub-DEBUG] {self.plugin_id}: path={req_path}?{req_qs} req_session=None sessions={sessions} picked={picked} decision={decision}", flush=True)
                     return None
-            if self.plugin_id == "bookoasis_wolf":
-                print(f"[PluginHub-DEBUG] {self.plugin_id}: path={req_path}?{req_qs} req_session={req_session!r} sessions={sessions} "
-                      f"SHOW_key={'SHOW_' + self.plugin_id + '__' + str(req_session)} "
-                      f"config_val={config.get('SHOW_' + self.plugin_id + '__' + str(req_session)) if req_session else None} "
-                      f"decision={decision}", flush=True)
-        except Exception as e:
-            if self.plugin_id == "bookoasis_wolf":
-                import traceback
-                print(f"[PluginHub-DEBUG] {self.plugin_id}: EXCEPTION {e!r}", flush=True)
-                traceback.print_exc()
+        except Exception:
+            pass
         return self._orig
 
 
@@ -240,7 +216,7 @@ def _discover_viewer_classes():
         excluded = _excluded_ids(config)
         all_subclasses = BaseMetadataProvider.__subclasses__()
     except Exception as e:
-        print(f"[PluginHub-DEBUG] _discover_viewer_classes 초기화 실패: {e!r}", flush=True)
+        print(f"[PluginHub] _discover_viewer_classes 초기화 실패: {e!r}", flush=True)
         return viewers
 
     seen = set()
@@ -266,8 +242,6 @@ def _discover_viewer_classes():
                 if isinstance(raw_tab, dict):
                     orig_tab = raw_tab
             if not isinstance(orig_tab, dict):
-                if p_id == "bookoasis_wolf":
-                    print(f"[PluginHub-DEBUG] {p_id}: orig_tab 을 dict로 못 구함 (desc={desc!r})", flush=True)
                 continue
 
             _ORIG_TABS[p_id] = orig_tab
@@ -280,7 +254,7 @@ def _discover_viewer_classes():
             enabled = _is_plugin_enabled(p_id)
             viewers.append((p_id, p_name, _tab_sessions(orig_tab), target_class, enabled))
         except Exception as e:
-            print(f"[PluginHub-DEBUG] 플러그인 처리 중 예외 (target_class={target_class!r}): {e!r}", flush=True)
+            print(f"[PluginHub] 플러그인 처리 중 예외 (target_class={target_class!r}): {e!r}", flush=True)
             continue
     return viewers
 
