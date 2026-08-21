@@ -57,31 +57,48 @@
   opacity: 0.55;
 }
 
-.pv-card-disabled .pv-session-check {
+.pv-card-disabled .pv-session-mode {
   cursor: not-allowed;
 }
 
-.pv-card-disabled input[type="checkbox"] {
+.pv-card-disabled select {
   cursor: not-allowed;
 }
 
 .pv-card-sessions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.pv-session-check {
+.pv-session-mode {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
   color: var(--bo-text-primary, #fff);
+}
+
+.pv-session-mode-label {
+  color: var(--bo-text-secondary, #9a9a9a);
+  min-width: 42px;
+}
+
+.pv-session-mode select {
+  flex: 1 1 auto;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  color: var(--bo-text-primary, #fff);
+  font-size: 12px;
   cursor: pointer;
 }
 
-.pv-session-check input {
-  cursor: pointer;
+.pv-session-mode-locked select {
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .pv-settings-empty,

@@ -1,16 +1,19 @@
-/* 플러그인 허브 — 설정 페이지: 세션 레인(칩 드래그 순서/세션 이동) + 카드형 세션 선택 UI
+/* 플러그인 허브 — 설정 페이지: 세션 레인(칩 드래그 순서/세션 이동) + 카드형 3단 선택 UI
    코어 계약: new Function('window','pluginId','root','config', js)(...)
-   저장은 코어 폼 submit이 root 내부 input[name]을 수집하므로:
-   - 체크박스 name: SHOW_<plugin_id>__<session>
-   - 세션별 순서 hidden input name: TAB_ORDER_<session> (콤마 구분 id 목록)
-   카드 체크 ON → 레인에 칩 추가, OFF/칩 x 클릭 → 칩 제거(체크 해제 연동).
-   칩 드래그: 같은 레인 = 순서 변경, 다른 레인 = 세션 이동(체크박스 연동).
+   저장은 코어 폼 submit이 root 내부 input/select[name]을 수집하므로:
+   - 세션별 모드 select name: MODE_<plugin_id>__<session>, 값은 ''(기본) / 'merge'(허브에 합치기) / 'hide'(완전히 숨기기)
+   - 세션별 순서 hidden input name: TAB_ORDER_<session> (콤마 구분 id 목록, merge인 것만)
+   카드에서 'merge' 선택 → 레인에 칩 추가, 그 외로 바뀌거나 칩 x 클릭 → 칩 제거(select 값 연동).
+   칩 드래그: 같은 레인 = 순서 변경, 다른 레인 = 세션 이동(select 값 연동, 대상 세션을 merge로).
    플러그인이 지원하지 않는 세션 레인으로는 이동 불가. */
 (function () {
   'use strict';
 
   const SESSION_LABELS = { general: '일반', adult: '성인', audiobook: '오디오', video: '비디오' };
   const SESSIONS = Object.keys(SESSION_LABELS);
+  const MODE_MERGE = 'merge';
+  const MODE_HIDE = 'hide';
+  const MODE_NORMAL = '';
   const grid = root.querySelector('[data-pv-role="grid"]');
   const lanesEl = root.querySelector('[data-pv-role="lanes"]');
   const excludedInput = root.querySelector('[data-pv-role="excluded-input"]');
@@ -71,16 +74,21 @@
     SESSIONS.forEach(syncOrder);
   }
 
-  function findCheckbox(pluginId, session) {
-    return grid.querySelector(`input[name="SHOW_${CSS.escape(pluginId)}__${CSS.escape(session)}"]`);
+  function findSelect(pluginId, session) {
+    return grid.querySelector(`select[data-pv-plugin="${CSS.escape(pluginId)}"][data-pv-session="${CSS.escape(session)}"]`);
   }
 
-  function setChecked(pluginId, session, on) {
-    const cb = findCheckbox(pluginId, session);
-    if (cb) cb.checked = !!on;
+  function setMode(pluginId, session, mode) {
+    const sel = findSelect(pluginId, session);
+    if (sel) sel.value = mode;
   }
 
-  /* ---------- 칩 ---------- */
+  function getMode(pluginId, session) {
+    const sel = findSelect(pluginId, session);
+    return sel ? sel.value : MODE_NORMAL;
+  }
+
+  /* ---------- 칩 (merge 상태인 것만 레인에 존재) ---------- */
 
   let dragChip = null;
   let dragFromSession = null;
@@ -90,11 +98,11 @@
       el.classList.remove('pv-drop-ok', 'pv-drop-deny'));
   }
 
-  // 세션 이동 확정: 출발/도착 체크박스 연동 + 순서 재계산
+  // 세션 이동 확정: 출발/도착 select 값 연동 + 순서 재계산
   function finishMove(pluginId, fromSession, toSession) {
     if (fromSession !== toSession) {
-      setChecked(pluginId, fromSession, false);
-      setChecked(pluginId, toSession, true);
+      setMode(pluginId, fromSession, MODE_NORMAL);
+      setMode(pluginId, toSession, MODE_MERGE);
     }
     syncAllOrders();
   }
@@ -105,12 +113,12 @@
     chip.className = 'pv-chip';
     chip.setAttribute('data-pv-id', pluginId);
     chip.setAttribute('draggable', 'true');
-    chip.innerHTML = `<span class="pv-chip-name">${esc(p.name)}</span><button type="button" class="pv-chip-x" title="표시 해제">&times;</button>`;
+    chip.innerHTML = `<span class="pv-chip-name">${esc(p.name)}</span><button type="button" class="pv-chip-x" title="기본으로">&times;</button>`;
 
     chip.querySelector('.pv-chip-x').addEventListener('click', (e) => {
       e.preventDefault();
       const s = chipSession(chip);
-      if (s) setChecked(pluginId, s, false);
+      if (s) setMode(pluginId, s, MODE_NORMAL);
       chip.remove();
       if (s) syncOrder(s);
     });
@@ -196,14 +204,16 @@
       lanesEl.appendChild(lane);
     });
 
-    // 체크된 플러그인을 저장된 순서 → 나머지 이름순으로 레인에 채움
+    // 'merge'로 선택된 플러그인을 저장된 순서 → 나머지 이름순으로 레인에 채움
     // 레인(탭 순서 시각화)에는 "실제로 지금 탭에 뜨는" 것만 넣는다 — 정지된 플러그인은
-    // 체크는 유지되지만(재활성화 시 자동 복원용) 지금 탭으로 뜨지 않으므로 레인에선 제외.
+    // 모드는 유지되지만(재활성화 시 자동 복원용) 지금 탭으로 뜨지 않으므로 레인에선 제외.
     SESSIONS.forEach((s) => {
-      const checkedIds = catalog.filter((p) => p.enabled !== false && p.checked && p.checked[s]).map((p) => p.id);
+      const mergedIds = catalog
+        .filter((p) => p.enabled !== false && p.modes && p.modes[s] === MODE_MERGE)
+        .map((p) => p.id);
       const order = Array.isArray(orders && orders[s]) ? orders[s] : [];
-      const sorted = order.filter((id) => checkedIds.includes(id))
-        .concat(checkedIds.filter((id) => !order.includes(id)));
+      const sorted = order.filter((id) => mergedIds.includes(id))
+        .concat(mergedIds.filter((id) => !order.includes(id)));
       sorted.forEach((id) => addChip(id, s));
       syncOrder(s);
     });
@@ -217,16 +227,21 @@
     grid.innerHTML = catalog.map((p) => {
       const version = p.version ? `v${esc(p.version)}` : '';
       const isEnabled = p.enabled !== false;
-      const checks = (p.sessions || []).map((s) => {
-        const key = `SHOW_${p.id}__${s}`;
-        const checked = p.checked && p.checked[s] ? 'checked' : '';
-        // 정지된 플러그인도 name/checked는 그대로 둔다 — save-config가 config 전체를
+      const selects = (p.sessions || []).map((s) => {
+        const key = `MODE_${p.id}__${s}`;
+        const cur = (p.modes && p.modes[s]) || MODE_NORMAL;
+        // 정지된 플러그인도 name/값은 그대로 둔다 — save-config가 config 전체를
         // 덮어쓰는 방식이라, 여기서 값을 지우거나 disabled로 빼면 저장 시 원래 선택이
-        // 영구 소실된다. 대신 클릭만 JS로 막아서(readOnly 흉내) 값은 항상 보존되게 한다.
+        // 영구 소실된다. 대신 상호작용만 JS/CSS로 막아서(readOnly 흉내) 값은 항상 보존되게 한다.
+        const opt = (val, label) => `<option value="${val}" ${cur === val ? 'selected' : ''}>${label}</option>`;
         return `
-          <label class="pv-session-check${isEnabled ? '' : ' pv-session-check-locked'}">
-            <input type="checkbox" name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" data-pv-locked="${isEnabled ? '0' : '1'}" ${checked}>
-            <span>${esc(SESSION_LABELS[s] || s)}</span>
+          <label class="pv-session-mode${isEnabled ? '' : ' pv-session-mode-locked'}">
+            <span class="pv-session-mode-label">${esc(SESSION_LABELS[s] || s)}</span>
+            <select name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" data-pv-locked="${isEnabled ? '0' : '1'}" tabindex="${isEnabled ? '0' : '-1'}">
+              ${opt('', '기본')}
+              ${opt(MODE_MERGE, '허브에 합치기')}
+              ${opt(MODE_HIDE, '완전히 숨기기')}
+            </select>
           </label>`;
       }).join('');
       return `
@@ -236,51 +251,54 @@
             ${version ? `<span class="pv-card-version">${version}</span>` : ''}
           </div>
           <div class="pv-card-id">${esc(p.id)}${isEnabled ? '' : ' · <span class="pv-card-badge">정지됨</span>'}</div>
-          <div class="pv-card-sessions">${checks}</div>
+          <div class="pv-card-sessions">${selects}</div>
         </div>`;
     }).join('');
 
-    grid.querySelectorAll('input[data-pv-plugin]').forEach((cb) => {
-      // 잠긴(정지된 플러그인) 체크박스는 클릭 자체를 막아 값이 항상 유지되게 한다.
-      cb.addEventListener('click', (e) => {
-        if (cb.getAttribute('data-pv-locked') === '1') {
-          e.preventDefault();
-        }
+    grid.querySelectorAll('select[data-pv-plugin]').forEach((sel) => {
+      // 잠긴(정지된 플러그인) select는 상호작용 자체를 막아 값이 항상 유지되게 한다.
+      sel.addEventListener('mousedown', (e) => {
+        if (sel.getAttribute('data-pv-locked') === '1') e.preventDefault();
       });
-      cb.addEventListener('change', () => {
-        if (cb.getAttribute('data-pv-locked') === '1') return;
-        const pid = cb.getAttribute('data-pv-plugin');
-        const s = cb.getAttribute('data-pv-session');
-        if (cb.checked) addChip(pid, s);
+      sel.addEventListener('keydown', (e) => {
+        if (sel.getAttribute('data-pv-locked') === '1') e.preventDefault();
+      });
+      sel.addEventListener('change', () => {
+        if (sel.getAttribute('data-pv-locked') === '1') return;
+        const pid = sel.getAttribute('data-pv-plugin');
+        const s = sel.getAttribute('data-pv-session');
+        if (sel.value === MODE_MERGE) addChip(pid, s);
         else removeChip(pid, s);
       });
     });
   }
 
-  // 일괄 선택/해제: 잠긴(정지된 플러그인) 체크박스는 값이 보존돼야 하므로 건드리지 않는다.
-  function bulkSetAll(checkedValue) {
-    grid.querySelectorAll('input[data-pv-plugin]').forEach((cb) => {
-      if (cb.getAttribute('data-pv-locked') === '1') return;
-      if (cb.checked === checkedValue) return;
-      cb.checked = checkedValue;
-      const pid = cb.getAttribute('data-pv-plugin');
-      const s = cb.getAttribute('data-pv-session');
-      if (checkedValue) addChip(pid, s);
+  // 일괄 합치기/기본으로: 잠긴(정지된 플러그인) select와 '완전히 숨기기'로 명시적으로
+  // 지정된 것은 건드리지 않는다 — 둘 다 의도적으로 보존해야 하는 값이라서.
+  function bulkSetMode(targetMode) {
+    grid.querySelectorAll('select[data-pv-plugin]').forEach((sel) => {
+      if (sel.getAttribute('data-pv-locked') === '1') return;
+      if (sel.value === MODE_HIDE) return;
+      if (sel.value === targetMode) return;
+      sel.value = targetMode;
+      const pid = sel.getAttribute('data-pv-plugin');
+      const s = sel.getAttribute('data-pv-session');
+      if (targetMode === MODE_MERGE) addChip(pid, s);
       else removeChip(pid, s);
     });
   }
 
   if (selectAllBtn) {
     selectAllBtn.addEventListener('click', () => {
-      if (window.confirm('현재 목록에 보이는 모든(잠기지 않은) 플러그인을 전부 켭니다. 계속할까요?')) {
-        bulkSetAll(true);
+      if (window.confirm('현재 목록에 보이는 모든(잠기지 않고, "완전히 숨기기"가 아닌) 플러그인을 전부 "허브에 합치기"로 바꿉니다. 계속할까요?')) {
+        bulkSetMode(MODE_MERGE);
       }
     });
   }
   if (deselectAllBtn) {
     deselectAllBtn.addEventListener('click', () => {
-      if (window.confirm('현재 목록에 보이는 모든(잠기지 않은) 플러그인을 전부 끕니다. 저장을 누르면 기존 선택이 사라집니다. 계속할까요?')) {
-        bulkSetAll(false);
+      if (window.confirm('현재 "허브에 합치기"로 되어 있는 항목들을 전부 "기본"으로 되돌립니다. 저장을 누르면 반영됩니다. 계속할까요?')) {
+        bulkSetMode(MODE_NORMAL);
       }
     });
   }

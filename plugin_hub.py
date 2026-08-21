@@ -122,13 +122,39 @@ def _is_on(value):
     return str(value).strip().lower() not in ("0", "false", "off", "no", "")
 
 
+_MODE_MERGE = "merge"
+_MODE_HIDE = "hide"
+_MODE_NORMAL = ""  # 기본값: 허브에도 안 넣고, 개별 사이드바 탭도 그대로 유지
+
+
+def _get_mode(config, p_id, session):
+    """세션별 3가지 모드 중 하나를 읽는다: 'merge'(허브에 합치기) / 'hide'(완전히 숨기기) / ''(기본, 그대로 표시).
+    저장 키: MODE_<plugin_id>__<session>. 과거 버전의 불리언 SHOW_<id>__<session> 값도
+    하위 호환으로 인식한다(True/'1' 등 켜져 있었으면 'merge'로 취급)."""
+    raw = config.get(f"MODE_{p_id}__{session}")
+    if raw in (_MODE_MERGE, _MODE_HIDE):
+        return raw
+    # 하위 호환: 예전 체크박스(SHOW_) 값이 남아있으면 merge로 승격
+    legacy = config.get(f"SHOW_{p_id}__{session}")
+    if legacy is not None and _is_on(legacy):
+        return _MODE_MERGE
+    return _MODE_NORMAL
+
+
 def _unified_sessions_for(config, p_id, sessions):
-    """설정에서 이 플러그인이 통합 표시되도록 선택된 세션 목록."""
-    picked = []
-    for s in sessions:
-        if _is_on(config.get(f"SHOW_{p_id}__{s}", False)):
-            picked.append(s)
-    return picked
+    """설정에서 이 플러그인이 허브에 통합 표시되도록('merge') 선택된 세션 목록."""
+    return [s for s in sessions if _get_mode(config, p_id, s) == _MODE_MERGE]
+
+
+def _hidden_sessions_for(config, p_id, sessions):
+    """설정에서 이 플러그인이 완전히 숨겨지도록('hide') 선택된 세션 목록."""
+    return [s for s in sessions if _get_mode(config, p_id, s) == _MODE_HIDE]
+
+
+def _non_normal_sessions_for(config, p_id, sessions):
+    """'merge' 또는 'hide' — 즉 개별 사이드바 탭이 더 이상 기본 상태가 아닌 세션 목록.
+    두 모드 다 개별 탭은 숨겨야 하므로(merge=허브 안으로, hide=완전 숨김) 하나로 묶어서 쓴다."""
+    return [s for s in sessions if _get_mode(config, p_id, s) in (_MODE_MERGE, _MODE_HIDE)]
 
 
 _DEFAULT_EXCLUDED_IDS = "bookoasis_plugins_viewer"
@@ -166,8 +192,11 @@ def _current_request_session():
 class _DynamicPluginCategoryTab:
     """개별 플러그인의 category_tab 동적 디스크립터.
 
-    현재 요청된 세션(db_type)에 대해 해당 플러그인이 허브에 통합 표시되도록 선택된 경우에만
-    해당 세션 사이드바에서 개별 탭을 숨긴다 (None 반환).
+    세션별 3가지 모드:
+      - 'merge'  : 허브 탭 안으로 통합 표시. 개별 사이드바 탭은 숨김.
+      - 'hide'   : 허브에도 안 넣고, 개별 사이드바 탭도 완전히 숨김.
+      - '' (기본): 손대지 않음. 개별 사이드바 탭 그대로 노출.
+    즉 'merge'/'hide' 둘 다 개별 탭은 숨겨야 하므로 판정 자체는 동일하게 처리한다.
     """
 
     def __init__(self, plugin_id, orig_tab):
@@ -183,13 +212,14 @@ class _DynamicPluginCategoryTab:
             sessions = _tab_sessions(self._orig)
             req_session = _current_request_session()
             if req_session:
-                if req_session in sessions and _is_on(
-                    config.get(f"SHOW_{self.plugin_id}__{req_session}", False)
+                if req_session in sessions and _get_mode(config, self.plugin_id, req_session) in (
+                    _MODE_MERGE,
+                    _MODE_HIDE,
                 ):
                     return None
             else:
-                picked = _unified_sessions_for(config, self.plugin_id, sessions)
-                if picked and len(picked) == len(sessions):
+                non_normal = _non_normal_sessions_for(config, self.plugin_id, sessions)
+                if non_normal and len(non_normal) == len(sessions):
                     return None
         except Exception:
             pass
@@ -341,7 +371,9 @@ class _DynamicCategoryTab:
 
 
 class _DynamicConfigSchema:
-    """설정 페이지 접근 시점에 설치된 뷰어 x 세션 체크박스 스키마 생성."""
+    """설정 페이지 접근 시점에 설치된 뷰어 x 세션 셀렉트 스키마 생성.
+    실제 UI는 settings.html/settings.js가 그리지만, 코어가 "설정 있음" 배지 판정 등에
+    이 스키마 존재 여부를 참고하므로 최신 키 형식(MODE_)에 맞춰 계속 채워둔다."""
 
     def __get__(self, obj, objtype=None):
         _apply_session_overrides()
@@ -351,14 +383,19 @@ class _DynamicConfigSchema:
                 label_session = _SESSION_LABELS.get(s, s)
                 schema.append(
                     {
-                        "key": f"SHOW_{p_id}__{s}",
-                        "label": f"{p_name} — {label_session} 통합 표시",
-                        "type": "checkbox",
+                        "key": f"MODE_{p_id}__{s}",
+                        "label": f"{p_name} — {label_session}",
+                        "type": "select",
                         "required": False,
-                        "default": False,
+                        "default": "",
+                        "options": [
+                            {"value": "", "label": "기본(개별 탭 그대로)"},
+                            {"value": _MODE_MERGE, "label": "허브에 합치기"},
+                            {"value": _MODE_HIDE, "label": "완전히 숨기기"},
+                        ],
                         "description": (
-                            f"{label_session} 보관함의 플러그인 허브에 {p_name}({p_id})를 표시합니다. "
-                            "하나라도 켜면 이 플러그인의 개별 사이드바 탭은 숨겨집니다."
+                            f"{label_session} 보관함에서 {p_name}({p_id})를 어떻게 표시할지 선택합니다. "
+                            "'허브에 합치기'와 '완전히 숨기기' 둘 다 개별 사이드바 탭은 숨겨집니다."
                         ),
                     }
                 )
@@ -444,20 +481,20 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         tabs = _sort_by_order(tabs, _session_order(config, session), "title")
 
         # 설정 카탈로그: 정지된 플러그인도 목록에는 계속 노출한다.
-        # 체크 값은 항상 "실제 저장된 값" 그대로 보여준다(강제 언체크 금지) — save-config API가
-        # 전체 config JSON을 통째로 덮어쓰는 방식이라, 여기서 강제로 false를 보여주면
+        # 모드 값은 항상 "실제 저장된 값" 그대로 보여준다(강제 초기화 금지) — save-config API가
+        # 전체 config JSON을 통째로 덮어쓰는 방식이라, 여기서 강제로 값을 바꿔 보여주면
         # 사용자가 저장 버튼을 누르는 순간 원래 선택값이 영구 소실된다. 대신 프론트(settings.js)에서
-        # enabled=False인 카드는 체크박스 클릭만 막아(값은 유지) 재설정 없이도 다시 켜면 그대로 복원되게 한다.
+        # enabled=False인 카드는 조작만 막아(값은 유지) 재설정 없이도 다시 켜면 그대로 복원되게 한다.
         catalog = []
         for p_id, p_name, sessions, _cls, enabled in discovered:
-            checked = {s: _is_on(config.get(f"SHOW_{p_id}__{s}", False)) for s in sessions}
+            modes = {s: (_get_mode(config, p_id, s) or "normal") for s in sessions}
             catalog.append(
                 {
                     "id": p_id,
                     "name": p_name,
                     "version": _read_plugin_version(p_id),
                     "sessions": sessions,
-                    "checked": checked,
+                    "modes": modes,
                     "enabled": enabled,
                 }
             )
