@@ -89,6 +89,48 @@
     });
   }
 
+  // 다른 카테고리 뷰 플러그인(kh_viewer 등)과 동일한 "보관함 이동" 컴포넌트.
+  // kh_viewer는 자기 자신이 adult 전용이라 활성 버튼을 하드코딩했지만, 플러그인 허브는
+  // 4개 세션 전부에서 쓰이므로 document.documentElement의 data-library-type으로
+  // 실제 현재 세션을 판별해 활성 버튼을 정한다.
+  function initLibraryNavigation() {
+    const navigation = $('library-navigation');
+    if (!navigation) return;
+    const current = document.documentElement.getAttribute('data-library-type') || 'general';
+
+    navigation.querySelectorAll('[data-library-destination]').forEach((button) => {
+      const type = button.dataset.libraryDestination;
+      const isActive = type === current;
+      const canAccess = typeof window.canAccessLibraryType !== 'function'
+        || window.canAccessLibraryType(type);
+
+      button.hidden = !canAccess;
+      button.classList.toggle('is-active', isActive);
+      if (isActive) {
+        button.setAttribute('aria-current', 'page');
+        return;
+      }
+
+      button.removeAttribute('aria-current');
+      button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        try {
+          if (typeof window.switchLibraryType === 'function') {
+            await window.switchLibraryType(type);
+            return;
+          }
+          const coreButton = document.getElementById(`btn-lib-${type}`);
+          if (coreButton) coreButton.click();
+        } finally {
+          if (root.isConnected) button.disabled = false;
+        }
+      });
+    });
+  }
+
+  initLibraryNavigation();
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
