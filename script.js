@@ -131,6 +131,46 @@
 
   initLibraryNavigation();
 
+  // 코어 전역 스캔 스피너(#header-category-scan-spinner)는 페이지에 하나만 존재하는
+  // getElementById 대상이라 id를 그대로 복사하면 충돌한다. 대신 우리 스피너를 따로 두고
+  // 코어 스피너의 style(표시/숨김) 변화를 MutationObserver로 그대로 따라가게 한다 —
+  // 코어가 이미 /api/system/status를 2초 주기로 폴링하고 있으므로 우리가 또 폴링할 필요 없음.
+  function initScanSpinnerMirror() {
+    const mine = $('scan-spinner');
+    if (!mine) return;
+
+    function sync(source) {
+      const visible = !!source && getComputedStyle(source).display !== 'none';
+      mine.style.display = visible ? 'inline-block' : 'none';
+    }
+
+    function attach(source) {
+      sync(source);
+      const mo = new MutationObserver(() => sync(source));
+      mo.observe(source, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    const existing = document.getElementById('header-category-scan-spinner');
+    if (existing) {
+      attach(existing);
+      return;
+    }
+    // 코어 헤더가 아직 안 그려졌을 수 있으니 잠깐 폴링해서 찾은 뒤 옵저버 연결
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      const found = document.getElementById('header-category-scan-spinner');
+      if (found) {
+        clearInterval(timer);
+        attach(found);
+      } else if (tries > 20) {
+        clearInterval(timer);
+      }
+    }, 250);
+  }
+
+  initScanSpinnerMirror();
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)

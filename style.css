@@ -35,6 +35,12 @@
   font-size: 1.1rem;
 }
 
+.uf-scan-spinner {
+  color: #c084fc;
+  font-size: 0.95rem;
+  margin-left: 0.2rem;
+}
+
 /* kh_viewer 등 다른 카테고리 뷰 플러그인들과 동일한 "보관함 이동" 컴포넌트.
    마크업/클래스명을 그대로 맞춰서(bo-viewer-library-nav) 다른 플러그인과 톤을 통일했다. */
 .bo-viewer-library-nav {
