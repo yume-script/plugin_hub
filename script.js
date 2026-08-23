@@ -171,6 +171,50 @@
 
   initScanSpinnerMirror();
 
+  // 코어 "스캔 활동" 버튼(#btn-scan-activity)의 시각적 복제본 — 클릭은 진짜 버튼에
+  // 위임하고(진짜 팝오버가 그대로 열림), .is-active 클래스만 미러링해 노란 점/펄스가
+  // 똑같이 뜨게 한다. 팝오버/목록 상태는 core의 scan_activity_status.js가 계속 관리하므로
+  // 여기서 따로 복제하지 않는다.
+  function initScanActivityMirror() {
+    const mine = $('scan-activity-mirror');
+    if (!mine) return;
+
+    mine.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const real = document.getElementById('btn-scan-activity');
+      if (real) real.click();
+    });
+
+    function sync(source) {
+      mine.classList.toggle('is-active', source.classList.contains('is-active'));
+    }
+
+    function attach(source) {
+      sync(source);
+      const mo = new MutationObserver(() => sync(source));
+      mo.observe(source, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    const existing = document.getElementById('btn-scan-activity');
+    if (existing) {
+      attach(existing);
+      return;
+    }
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      const found = document.getElementById('btn-scan-activity');
+      if (found) {
+        clearInterval(timer);
+        attach(found);
+      } else if (tries > 20) {
+        clearInterval(timer);
+      }
+    }, 250);
+  }
+
+  initScanActivityMirror();
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
