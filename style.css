@@ -35,12 +35,6 @@
   font-size: 1.1rem;
 }
 
-.uf-scan-spinner {
-  color: #c084fc;
-  font-size: 0.95rem;
-  margin-left: 0.2rem;
-}
-
 .uf-nav-group {
   display: flex;
   align-items: center;
