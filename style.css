@@ -158,18 +158,20 @@
   flex: 0 0 auto;
   border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
 
 .uf-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  padding: 6px 8px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
+  padding: 6px 8px;
+  /* 탭이 많아지면 가로 스크롤 대신 최대 2줄까지 자동 줄바꿈, 그 이상이면 세로 스크롤 */
+  max-height: 76px;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-width: 0;
 }
 
