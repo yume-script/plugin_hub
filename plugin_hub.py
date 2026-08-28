@@ -273,15 +273,21 @@ def _discover_viewer_classes():
         print(f"[PluginHub] _discover_viewer_classes 초기화 실패: {e!r}", flush=True)
         return viewers
 
-    seen = set()
+    # p_id별로 발견되는 대로 계속 덮어써서(last-wins) 가장 마지막에 순회된 클래스를 쓴다.
+    # 예전에는 "처음 발견한 것을 쓰고 이후 중복은 건너뛰기(first-wins)"였는데, 이러면
+    # 핫리로드(재시작 없이 개별 플러그인 코드만 다시 불러오기)로 이름 등이 바뀐 최신 클래스가
+    # 로드돼도, 메모리에 아직 남아있는 예전(스테일) 클래스가 먼저 잡히면 그게 계속 이겨서
+    # GitHub에서 이름만 바꿔 업데이트해도 화면에 반영이 안 되는 문제가 있었다.
+    # 추가로, 아직 우리가 한 번도 감싸지 않은(=category_tab이 아직 plain dict인) 클래스는
+    # "방금 새로 로드된 것"일 가능성이 높으므로, 이미 감싸진 스테일 클래스보다 우선한다.
+    best_by_id = {}
     for target_class in all_subclasses:
         try:
             if not target_class:
                 continue
             p_id = getattr(target_class, "id", None)
-            if not p_id or p_id == SELF_ID or p_id in seen or p_id in excluded:
+            if not p_id or p_id == SELF_ID or p_id in excluded:
                 continue
-            seen.add(p_id)
 
             orig_tab = None
             desc = None
@@ -298,6 +304,28 @@ def _discover_viewer_classes():
             if not isinstance(orig_tab, dict):
                 continue
 
+            is_unwrapped = not isinstance(desc, _DynamicPluginCategoryTab)
+            prev = best_by_id.get(p_id)
+            if prev is not None and prev["unwrapped"] and not is_unwrapped:
+                # 이미 "감싸지지 않은(더 최신일 가능성이 높은)" 후보를 갖고 있는데
+                # 지금 것은 이미 감싸진(스테일일 가능성이 높은) 것이면 무시하고 기존 걸 유지.
+                continue
+            best_by_id[p_id] = {
+                "target_class": target_class,
+                "orig_tab": orig_tab,
+                "desc": desc,
+                "unwrapped": is_unwrapped,
+            }
+        except Exception as e:
+            print(f"[PluginHub] 플러그인 탐색 중 예외 (target_class={target_class!r}): {e!r}", flush=True)
+            continue
+
+    for p_id, info in best_by_id.items():
+        try:
+            target_class = info["target_class"]
+            orig_tab = info["orig_tab"]
+            desc = info["desc"]
+
             _ORIG_TABS[p_id] = orig_tab
 
             # 모든 카테고리 뷰어 플러그인의 category_tab을 _DynamicPluginCategoryTab으로 감싸기
@@ -308,7 +336,7 @@ def _discover_viewer_classes():
             enabled = _is_plugin_enabled(p_id)
             viewers.append((p_id, p_name, _tab_sessions(orig_tab), target_class, enabled))
         except Exception as e:
-            print(f"[PluginHub] 플러그인 처리 중 예외 (target_class={target_class!r}): {e!r}", flush=True)
+            print(f"[PluginHub] 플러그인 처리 중 예외 (p_id={p_id!r}): {e!r}", flush=True)
             continue
     return viewers
 
