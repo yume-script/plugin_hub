@@ -16,10 +16,21 @@
 """
 
 import json
+import time
 
 from plugins.metadata.base import BaseMetadataProvider
 
 SELF_ID = "plugin_hub"
+
+# 설정/활성화 상태 조회는 DB 라운드트립이 들기 때문에(설정: 4개 세션 DB 순회, 활성화: 세션당
+# 플러그인당 1회) 아주 짧은 TTL로 프로세스 메모리에 캐시한다. category_tab 디스크립터가
+# 사이드바에 그려지는 플러그인 개수만큼 매번 __get__ 되고, 그 안에서 다시 전체 플러그인을
+# 재탐색하는 구조라 캐시가 없으면 사이드바 렌더 1회에 DB 쿼리가 플러그인 수의 제곱에 비례해
+# 발생할 수 있다. 저장 직후(get_dashboard_data)에는 force_refresh로 캐시를 무시하고 최신값을
+# 즉시 읽어오므로 "저장했는데 안 바뀜" 문제는 생기지 않는다.
+_CONFIG_CACHE_TTL_SEC = 3.0
+_config_cache = {"data": None, "ts": 0.0}
+_enabled_cache = {}  # p_id -> (bool, ts)
 
 _SESSION_LABELS = {
     "general": "일반",
@@ -49,11 +60,20 @@ def _load_general_config(force_refresh=False):
     무조건 general→adult→audiobook→video 순서로 키 단위 병합했는데, 이러면 "최신 저장"이
     아니라 그냥 "반복문에서 나중에 도는 DB"가 항상 이겨버려서, 예를 들어 예전에 audiobook
     세션에서 저장했던 오래된 값이 방금 general 세션에서 한 새 저장을 덮어써버리는 버그가 있었다.
-    updated_at 타임스탬프를 직접 비교해 진짜 최신 저장을 골라야 한다."""
+    updated_at 타임스탬프를 직접 비교해 진짜 최신 저장을 골라야 한다.
+
+    force_refresh=False(기본)일 때는 짧은 TTL(_CONFIG_CACHE_TTL_SEC) 캐시를 먼저 확인해
+    같은 요청/렌더 사이클 안에서 반복 호출되더라도 DB를 매번 다시 때리지 않는다. 저장 직후처럼
+    최신값이 반드시 필요한 지점(get_dashboard_data)에서는 force_refresh=True로 캐시를 건너뛴다."""
+    now = time.time()
+    if not force_refresh and _config_cache["data"] is not None:
+        if (now - _config_cache["ts"]) < _CONFIG_CACHE_TTL_SEC:
+            return _config_cache["data"]
+
     try:
         from services.plugin_db_gateway import PluginDatabaseGateway
     except Exception:
-        return {}
+        return _config_cache["data"] or {}
 
     best_data = {}
     best_ts = None
@@ -79,6 +99,8 @@ def _load_general_config(force_refresh=False):
                 best_data = data
         except Exception:
             continue
+    _config_cache["data"] = best_data
+    _config_cache["ts"] = now
     return best_data
 
 
@@ -226,7 +248,7 @@ class _DynamicPluginCategoryTab:
         return self._orig
 
 
-def _is_plugin_enabled(p_id):
+def _is_plugin_enabled(p_id, force_refresh=False):
     """코어 표준 계약: general 스코프의 PLUGIN_ENABLED_<id> 설정 (PluginDatabaseGateway.get_setting 사용).
 
     PluginDatabaseGateway.get_setting(key, default)은:
@@ -237,23 +259,38 @@ def _is_plugin_enabled(p_id):
 
     코어(services/metadata_factory.py, plugin_service.py)와 동일하게
     '명시적으로 0이 저장된 경우에만 비활성'으로 판정한다. 값이 없거나 '1'이거나
-    그 외 값이면 전부 활성으로 간주한다. 조회 자체가 실패해도 안전하게 활성으로 간주한다."""
+    그 외 값이면 전부 활성으로 간주한다. 조회 자체가 실패해도 안전하게 활성으로 간주한다.
+
+    참고: 항상 general DB 스코프만 조회한다. 코어의 PLUGIN_ENABLED_<id> 토글이
+    세션(general/adult/audiobook/video)별로 분리되어 있지 않고 전역 설정이라는 전제이며,
+    만약 코어 쪽이 세션별로 분리되어 있다면 성인/오디오북 세션에서 판정이 실제와 어긋날 수
+    있으니 코어 구현과 대조해 확인이 필요하다.
+
+    _load_general_config()와 동일하게 짧은 TTL로 캐시한다 — 사이드바에 플러그인이 N개면
+    한 번 렌더링에 이 함수가 N번 호출될 수 있어 캐시 없이는 매번 DB를 때리게 된다."""
+    now = time.time()
+    cached = _enabled_cache.get(p_id)
+    if not force_refresh and cached is not None and (now - cached[1]) < _CONFIG_CACHE_TTL_SEC:
+        return cached[0]
+
     try:
         from services.plugin_db_gateway import PluginDatabaseGateway
 
         gw = PluginDatabaseGateway("general")
         row = gw.get_setting(f"PLUGIN_ENABLED_{p_id}", default=None)
         if row is None:
-            return True
-        val = row.get("value") if isinstance(row, dict) else row
-        if val is None:
-            return True
-        return str(val).strip() != "0"
+            value = True
+        else:
+            val = row.get("value") if isinstance(row, dict) else row
+            value = True if val is None else str(val).strip() != "0"
     except Exception:
-        return True
+        value = True
+
+    _enabled_cache[p_id] = (value, now)
+    return value
 
 
-def _discover_viewer_classes():
+def _discover_viewer_classes(force_refresh_config=False):
     """category_tab 을 가진 (자신 제외, 설정에서 제외 처리된 id 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩.
     정지(비활성) 플러그인도 포함해서 반환하되 enabled 플래그로 구분한다
     (탭 목록에서는 제외하지만, 설정 카탈로그에서는 계속 보여주고 체크박스만 꺼둔 채로 노출하기 위함).
@@ -266,7 +303,7 @@ def _discover_viewer_classes():
     try:
         from plugins.metadata.base import BaseMetadataProvider
 
-        config = _load_general_config()
+        config = _load_general_config(force_refresh=force_refresh_config)
         excluded = _excluded_ids(config)
         all_subclasses = BaseMetadataProvider.__subclasses__()
     except Exception as e:
@@ -333,7 +370,7 @@ def _discover_viewer_classes():
                 target_class.category_tab = _DynamicPluginCategoryTab(p_id, orig_tab)
 
             p_name = orig_tab.get("title") or getattr(target_class, "name", p_id)
-            enabled = _is_plugin_enabled(p_id)
+            enabled = _is_plugin_enabled(p_id, force_refresh=force_refresh_config)
             viewers.append((p_id, p_name, _tab_sessions(orig_tab), target_class, enabled))
         except Exception as e:
             print(f"[PluginHub] 플러그인 처리 중 예외 (p_id={p_id!r}): {e!r}", flush=True)
@@ -342,12 +379,22 @@ def _discover_viewer_classes():
 
 
 def _apply_session_overrides(force_refresh_config=False):
-    """모든 타겟 뷰어 클래스 탐색 및 오버라이드 바인딩 적용."""
-    _discover_viewer_classes()
+    """모든 타겟 뷰어 클래스 탐색 및 오버라이드 바인딩 적용.
+
+    이전 버전에서는 force_refresh_config 인자를 받기만 하고 실제로는 아무 데도 쓰지
+    않는 죽은 파라미터였다(캐시 자체가 없었으므로). 지금은 _load_general_config /
+    _is_plugin_enabled에 짧은 TTL 캐시가 생겼기 때문에, 저장 직후처럼 최신값이
+    반드시 필요한 호출부에서 이 값을 True로 넘기면 실제로 캐시를 건너뛰고 새로
+    조회하도록 아래로 그대로 전달한다."""
+    _discover_viewer_classes(force_refresh_config=force_refresh_config)
 
 
 def _read_plugin_version(p_id):
-    """플러그인 폴더의 VERSION 파일에서 버전 문자열 파싱."""
+    """플러그인 폴더의 VERSION 파일에서 버전 문자열 파싱.
+
+    주의: 플러그인 폴더명이 plugin_id와 동일하다는 관례에 의존한다(대부분의 경우 맞지만
+    보장된 계약은 아니다). 폴더명과 id가 다른 플러그인이 있다면 아래 os.path.join의 결과가
+    존재하지 않는 경로가 되어 버전이 조용히 빈 문자열로 표시된다(예외는 아님)."""
     import os
 
     try:

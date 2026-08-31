@@ -305,13 +305,21 @@
     }
   }
 
+  // 허브가 직접 숨긴 요소에만 마커 속성(HIDE_MARKER)을 남기고, 복원 단계에서도 그 마커가
+  // 붙은 요소만 대상으로 삼는다. 이전 버전은 "[data-plugin-id], [data-tab-id]를 가진 페이지
+  // 전체 요소 중 display:none이고 hiddenIds에 없는 것"을 전부 복원 대상으로 봤는데, 이러면
+  // 다른 코드가 같은 속성 이름을 다른 용도로 쓰면서 의도적으로 숨겨둔 요소까지 실수로 다시
+  // 보이게 만들 위험이 있었다. 마커를 우리가 직접 찍고 우리가 찍은 것만 되돌리면 그 문제가
+  // 원천적으로 사라진다.
+  const HIDE_MARKER = 'data-plugin-hub-hidden';
+
   function cleanUpSidebarTabs(viewerList) {
     if (!Array.isArray(viewerList)) return;
     const hiddenIds = new Set(viewerList.map((p) => p && p.id).filter(Boolean));
     hiddenIds.delete(SELF_ID);
 
     try {
-      // 1. 허브에 포함된 플러그인의 개별 사이드바 탭 숨김
+      // 1. 허브에 포함된 플러그인의 개별 사이드바 탭 숨김 (숨긴 요소에는 마커를 남긴다)
       viewerList.forEach((p) => {
         if (!p || !p.id || p.id === SELF_ID) return;
         const selectors = [
@@ -322,19 +330,20 @@
         ];
         selectors.forEach((sel) => {
           document.querySelectorAll(sel).forEach((el) => {
-            if (!el.closest('[data-uf-root]')) {
-              el.style.display = 'none';
-            }
+            if (el.closest('[data-uf-root]')) return;
+            el.style.display = 'none';
+            el.setAttribute(HIDE_MARKER, p.id);
           });
         });
       });
 
-      // 2. 허브에서 체크 해제된 플러그인의 사이드바 탭 복원
-      document.querySelectorAll('[data-role="sidebar-category-dynamic"], [data-plugin-id], [data-tab-id]').forEach((el) => {
-        if (el.closest('[data-uf-root]')) return;
-        const pid = el.dataset.pluginId || el.dataset.tabId || (el.dataset.id && el.dataset.id.startsWith('plugin_') ? el.dataset.id.replace('plugin_', '') : null);
-        if (pid && !hiddenIds.has(pid) && el.style.display === 'none') {
+      // 2. 허브가 이전에 숨겨뒀지만(마커 보유) 이제는 더 이상 숨길 대상이 아닌 요소만 복원.
+      //    마커가 없는 요소(다른 이유로 display:none인 요소)는 절대 건드리지 않는다.
+      document.querySelectorAll(`[${HIDE_MARKER}]`).forEach((el) => {
+        const pid = el.getAttribute(HIDE_MARKER);
+        if (pid && !hiddenIds.has(pid)) {
           el.style.display = '';
+          el.removeAttribute(HIDE_MARKER);
         }
       });
     } catch (_) {}
@@ -350,8 +359,16 @@
     }
   }
 
-  window.reloadPluginHubTabs = reloadViewerTabs;
-  window.addEventListener('plugin_hub:config_updated', reloadViewerTabs);
+  // 설정이 바뀌면(예: 병합된 플러그인이 update_manifest로 자기 UI 파일을 자동 업데이트한
+  // 직후) 캐시된 UI 번들이 새로고침 전까지 계속 옛 버전으로 남아있지 않도록 bundleCache도
+  // 함께 비운다. 탭 목록 자체만 새로 받아오고 번들 캐시는 그대로 두던 것이 이전 동작이었다.
+  function reloadViewerTabsAndClearCache() {
+    bundleCache.clear();
+    return reloadViewerTabs();
+  }
+
+  window.reloadPluginHubTabs = reloadViewerTabsAndClearCache;
+  window.addEventListener('plugin_hub:config_updated', reloadViewerTabsAndClearCache);
 
   async function init() {
     try {
