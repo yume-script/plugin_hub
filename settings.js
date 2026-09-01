@@ -224,36 +224,48 @@
       grid.innerHTML = '<div class="pv-settings-empty">표시할 카테고리 뷰 플러그인이 설치되어 있지 않습니다.</div>';
       return;
     }
-    grid.innerHTML = catalog.map((p) => {
+
+    const optHtml = (cur, val, label) => `<option value="${val}" ${cur === val ? 'selected' : ''}>${label}</option>`;
+
+    function cellHtml(p, s, isEnabled) {
+      if (!(p.sessions || []).includes(s)) {
+        return '<td class="pv-cell-na" aria-hidden="true">—</td>';
+      }
+      const key = `MODE_${p.id}__${s}`;
+      const cur = (p.modes && p.modes[s]) || MODE_NORMAL;
+      // 정지된 플러그인도 name/값은 그대로 둔다 — save-config가 config 전체를
+      // 덮어쓰는 방식이라, 여기서 값을 지우거나 disabled로 빼면 저장 시 원래 선택이
+      // 영구 소실된다. 대신 상호작용만 JS/CSS로 막아서(readOnly 흉내) 값은 항상 보존되게 한다.
+      return `
+        <td class="pv-cell${isEnabled ? '' : ' pv-cell-locked'}">
+          <select name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" data-pv-locked="${isEnabled ? '0' : '1'}" tabindex="${isEnabled ? '0' : '-1'}">
+            ${optHtml(cur, '', '기본')}
+            ${optHtml(cur, MODE_MERGE, '허브에 합치기')}
+            ${optHtml(cur, MODE_HIDE, '완전히 숨기기')}
+          </select>
+        </td>`;
+    }
+
+    const headCells = SESSIONS.map((s) => `<th>${esc(SESSION_LABELS[s] || s)}</th>`).join('');
+    const rows = catalog.map((p) => {
       const version = p.version ? `v${esc(p.version)}` : '';
       const isEnabled = p.enabled !== false;
-      const selects = (p.sessions || []).map((s) => {
-        const key = `MODE_${p.id}__${s}`;
-        const cur = (p.modes && p.modes[s]) || MODE_NORMAL;
-        // 정지된 플러그인도 name/값은 그대로 둔다 — save-config가 config 전체를
-        // 덮어쓰는 방식이라, 여기서 값을 지우거나 disabled로 빼면 저장 시 원래 선택이
-        // 영구 소실된다. 대신 상호작용만 JS/CSS로 막아서(readOnly 흉내) 값은 항상 보존되게 한다.
-        const opt = (val, label) => `<option value="${val}" ${cur === val ? 'selected' : ''}>${label}</option>`;
-        return `
-          <label class="pv-session-mode${isEnabled ? '' : ' pv-session-mode-locked'}">
-            <span class="pv-session-mode-label">${esc(SESSION_LABELS[s] || s)}</span>
-            <select name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" data-pv-locked="${isEnabled ? '0' : '1'}" tabindex="${isEnabled ? '0' : '-1'}">
-              ${opt('', '기본')}
-              ${opt(MODE_MERGE, '허브에 합치기')}
-              ${opt(MODE_HIDE, '완전히 숨기기')}
-            </select>
-          </label>`;
-      }).join('');
+      const sessionCells = SESSIONS.map((s) => cellHtml(p, s, isEnabled)).join('');
       return `
-        <div class="pv-card${isEnabled ? '' : ' pv-card-disabled'}">
-          <div class="pv-card-head">
-            <h5 class="pv-card-title">${esc(p.name)}</h5>
-            ${version ? `<span class="pv-card-version">${version}</span>` : ''}
-          </div>
-          <div class="pv-card-id">${esc(p.id)}${isEnabled ? '' : ' · <span class="pv-card-badge">정지됨</span>'}</div>
-          <div class="pv-card-sessions">${selects}</div>
-        </div>`;
+        <tr class="pv-row${isEnabled ? '' : ' pv-row-disabled'}">
+          <th scope="row" class="pv-row-name">
+            <div class="pv-row-title">${esc(p.name)}</div>
+            <div class="pv-row-meta">${esc(p.id)}${version ? ` · ${version}` : ''}${isEnabled ? '' : ' · <span class="pv-row-badge">정지됨</span>'}</div>
+          </th>
+          ${sessionCells}
+        </tr>`;
     }).join('');
+
+    grid.innerHTML = `
+      <table class="pv-table">
+        <thead><tr><th class="pv-col-name">플러그인</th>${headCells}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
 
     grid.querySelectorAll('select[data-pv-plugin]').forEach((sel) => {
       // 잠긴(정지된 플러그인) select는 상호작용 자체를 막아 값이 항상 유지되게 한다.

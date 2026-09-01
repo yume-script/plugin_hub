@@ -10,6 +10,7 @@
   const panesEl = $('panes');
   const statusEl = $('status');
   const settingsBtn = $('open-settings');
+  const versionEl = $('header-version');
 
   let plugins = [];
   let activeId = null;
@@ -89,92 +90,6 @@
     });
   }
 
-  // 다른 카테고리 뷰 플러그인(kh_viewer 등)과 동일한 "보관함 이동" 컴포넌트.
-  // kh_viewer는 자기 자신이 adult 전용이라 활성 버튼을 하드코딩했지만, 플러그인 허브는
-  // 4개 세션 전부에서 쓰이므로 document.documentElement의 data-library-type으로
-  // 실제 현재 세션을 판별해 활성 버튼을 정한다.
-  function initLibraryNavigation() {
-    const navigation = $('library-navigation');
-    if (!navigation) return;
-    const current = document.documentElement.getAttribute('data-library-type') || 'general';
-
-    navigation.querySelectorAll('[data-library-destination]').forEach((button) => {
-      const type = button.dataset.libraryDestination;
-      const isActive = type === current;
-      const canAccess = typeof window.canAccessLibraryType !== 'function'
-        || window.canAccessLibraryType(type);
-
-      button.hidden = !canAccess;
-      button.classList.toggle('is-active', isActive);
-      if (isActive) {
-        button.setAttribute('aria-current', 'page');
-        return;
-      }
-
-      button.removeAttribute('aria-current');
-      button.addEventListener('click', async () => {
-        if (button.disabled) return;
-        button.disabled = true;
-        try {
-          if (typeof window.switchLibraryType === 'function') {
-            await window.switchLibraryType(type);
-            return;
-          }
-          const coreButton = document.getElementById(`btn-lib-${type}`);
-          if (coreButton) coreButton.click();
-        } finally {
-          if (root.isConnected) button.disabled = false;
-        }
-      });
-    });
-  }
-
-  initLibraryNavigation();
-
-  // 코어 "스캔 활동" 버튼(#btn-scan-activity)의 시각적 복제본 — 클릭은 진짜 버튼에
-  // 위임하고(진짜 팝오버가 그대로 열림), .is-active 클래스만 미러링해 노란 점/펄스가
-  // 똑같이 뜨게 한다. 팝오버/목록 상태는 core의 scan_activity_status.js가 계속 관리하므로
-  // 여기서 따로 복제하지 않는다.
-  function initScanActivityMirror() {
-    const mine = $('scan-activity-mirror');
-    if (!mine) return;
-
-    mine.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const real = document.getElementById('btn-scan-activity');
-      if (real) real.click();
-    });
-
-    function sync(source) {
-      mine.classList.toggle('is-active', source.classList.contains('is-active'));
-    }
-
-    function attach(source) {
-      sync(source);
-      const mo = new MutationObserver(() => sync(source));
-      mo.observe(source, { attributes: true, attributeFilter: ['class'] });
-    }
-
-    const existing = document.getElementById('btn-scan-activity');
-    if (existing) {
-      attach(existing);
-      return;
-    }
-    let tries = 0;
-    const timer = setInterval(() => {
-      tries += 1;
-      const found = document.getElementById('btn-scan-activity');
-      if (found) {
-        clearInterval(timer);
-        attach(found);
-      } else if (tries > 20) {
-        clearInterval(timer);
-      }
-    }, 250);
-  }
-
-  initScanActivityMirror();
-
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -208,7 +123,15 @@
     if (!res.ok) throw new Error(`통합 뷰어 목록 조회 실패 (HTTP ${res.status})`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || '통합 뷰어 목록 조회 실패');
-    return Array.isArray(data.viewers) ? data.viewers : [];
+    return {
+      viewers: Array.isArray(data.viewers) ? data.viewers : [],
+      hubVersion: typeof data.hub_version === 'string' ? data.hub_version : '',
+    };
+  }
+
+  function updateHeaderVersion(version) {
+    if (!versionEl) return;
+    versionEl.textContent = version ? `v${version}` : '';
   }
 
   async function getBundle(pluginId) {
@@ -351,9 +274,11 @@
 
   async function reloadViewerTabs() {
     try {
-      plugins = await fetchViewers();
+      const result = await fetchViewers();
+      plugins = result.viewers;
       renderTabs();
       cleanUpSidebarTabs(plugins);
+      updateHeaderVersion(result.hubVersion);
     } catch (err) {
       console.error('[PluginHub] reload error:', err);
     }
@@ -372,9 +297,11 @@
 
   async function init() {
     try {
-      plugins = await fetchViewers();
+      const result = await fetchViewers();
+      plugins = result.viewers;
       renderTabs();
       cleanUpSidebarTabs(plugins);
+      updateHeaderVersion(result.hubVersion);
     } catch (err) {
       console.error('[PluginHub] init error:', err);
       showStatus('뷰어 목록을 불러오지 못했습니다: ' + (err.message || '오류'), true);

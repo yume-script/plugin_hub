@@ -584,6 +584,7 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
             "catalog": catalog,
             "orders": orders,
             "excluded_ids": excluded_ids_str,
+            "hub_version": _read_plugin_version(SELF_ID),
         }
 
 

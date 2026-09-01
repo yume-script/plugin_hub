@@ -5,88 +5,99 @@
   line-height: 1.6;
 }
 
-/* ---- 카드 그리드 ---- */
+/* ---- 전체 설정 요약 표 ---- */
 
-.pv-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+.pv-table-wrap {
   margin-bottom: 24px;
-}
-
-.pv-card {
+  overflow-x: auto;
   border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
   border-radius: 10px;
-  padding: 14px;
+}
+
+.pv-grid {
+  min-width: 100%;
+}
+
+.pv-table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
   background: var(--bo-surface, rgba(255, 255, 255, 0.04));
 }
 
-.pv-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-
-.pv-card-title {
-  margin: 0;
+.pv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
   font-weight: 600;
-  font-size: 14px;
-  color: var(--bo-text-primary, #fff);
-}
-
-.pv-card-version {
-  font-size: 11px;
   color: var(--bo-text-secondary, #9a9a9a);
+  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
   white-space: nowrap;
 }
 
-.pv-card-id {
-  font-size: 11px;
-  color: var(--bo-text-secondary, #9a9a9a);
-  margin-bottom: 10px;
+.pv-table thead th.pv-col-name {
+  min-width: 180px;
 }
 
-.pv-card-badge {
+.pv-table tbody tr + tr {
+  border-top: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.08));
+}
+
+.pv-table tbody tr:hover {
+  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.04));
+}
+
+.pv-row-name {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 400;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pv-row-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--bo-text-primary, #fff);
+}
+
+.pv-row-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--bo-text-secondary, #9a9a9a);
+}
+
+.pv-row-badge {
   color: var(--bo-error, #e5484d);
   font-weight: 600;
 }
 
-.pv-card-disabled {
+.pv-row-disabled {
   opacity: 0.55;
 }
 
-.pv-card-disabled .pv-session-mode {
+.pv-row-disabled .pv-cell select {
   cursor: not-allowed;
 }
 
-.pv-card-disabled select {
-  cursor: not-allowed;
+.pv-cell {
+  padding: 6px 10px;
+  vertical-align: middle;
 }
 
-.pv-card-sessions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.pv-cell-na {
+  padding: 6px 10px;
+  text-align: center;
+  color: var(--bo-text-secondary, #6b6b6b);
 }
 
-.pv-session-mode {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--bo-text-primary, #fff);
-}
-
-.pv-session-mode-label {
-  color: var(--bo-text-secondary, #9a9a9a);
-  min-width: 42px;
-}
-
-.pv-session-mode select {
-  flex: 1 1 auto;
+.pv-cell select {
+  width: 100%;
+  min-width: 108px;
   padding: 4px 6px;
   border-radius: 6px;
   border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
@@ -96,14 +107,13 @@
   cursor: pointer;
 }
 
-.pv-session-mode-locked select {
+.pv-cell-locked select {
   pointer-events: none;
   opacity: 0.7;
 }
 
 .pv-settings-empty,
 .pv-settings-error {
-  grid-column: 1 / -1;
   padding: 24px 4px;
   color: var(--bo-text-secondary, #9a9a9a);
   font-size: 13px;
