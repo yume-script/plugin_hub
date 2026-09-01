@@ -5,6 +5,25 @@
   const root = document.querySelector('[data-uf-root]');
   if (!root) return;
 
+  // GitHub 저장소의 VERSION 파일을 직접 조회해 최신 버전과 비교한다 (사용자 요청).
+  // raw.githubusercontent.com은 기본적으로 CORS를 열어주므로 서버 프록시 없이 브라우저에서
+  // 바로 fetch 가능하다. update_manifest(코어 관리자 화면의 "샘플 업데이트" 버튼용)와 같은
+  // 저장소/브랜치를 가리키며, 이 배지는 그 화면까지 가지 않아도 탭 헤더에서 바로 눈에 띄게
+  // 알려주는 보조 표시일 뿐 — 실제 파일 교체는 여전히 관리자가 환경설정 화면에서 진행해야 한다.
+  const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/yume-script/plugin_hub/refs/heads/main/VERSION';
+  const GITHUB_REPO_URL = 'https://github.com/yume-script/plugin_hub';
+
+  function compareVersions(a, b) {
+    const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i += 1) {
+      const diff = (pa[i] || 0) - (pb[i] || 0);
+      if (diff !== 0) return diff > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
   const $ = (role) => root.querySelector(`[data-role="${role}"]`);
   const tabsEl = $('tabs');
   const panesEl = $('panes');
@@ -132,6 +151,40 @@
   function updateHeaderVersion(version) {
     if (!versionEl) return;
     versionEl.textContent = version ? `v${version}` : '';
+  }
+
+  function showUpdateNotice(latestVersion) {
+    if (!versionEl || !versionEl.parentElement) return;
+    let link = versionEl.parentElement.querySelector('[data-role="header-update-notice"]');
+    if (!link) {
+      link = document.createElement('a');
+      link.setAttribute('data-role', 'header-update-notice');
+      link.className = 'uf-header-update';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.href = GITHUB_REPO_URL;
+      link.title = 'GitHub에서 새 버전을 확인하고, 환경설정 > 플러그인 설정에서 업데이트하세요: ' + GITHUB_REPO_URL;
+      versionEl.insertAdjacentElement('afterend', link);
+    }
+    link.textContent = `⬆ v${latestVersion} 업데이트 가능`;
+  }
+
+  // GitHub 최신 VERSION과 비교해 새 버전이 있으면 배지를 띄운다. 마운트(플러그인 탭 진입)마다
+  // 1회만 확인하고, 네트워크 실패/오프라인/사내망 차단 등은 조용히 무시한다 — 이건 어디까지나
+  // 부가 안내이지 핵심 기능이 아니므로 실패해도 나머지 UI 동작에 영향을 주면 안 된다.
+  async function checkForUpdate(currentVersion) {
+    if (!currentVersion) return;
+    try {
+      const res = await fetch(GITHUB_VERSION_URL, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const latest = data && data['plugin version'];
+      if (latest && compareVersions(latest, currentVersion) > 0) {
+        showUpdateNotice(latest);
+      }
+    } catch (err) {
+      console.debug('[PluginHub] GitHub 버전 확인 실패(무시 가능):', err);
+    }
   }
 
   async function getBundle(pluginId) {
@@ -302,6 +355,7 @@
       renderTabs();
       cleanUpSidebarTabs(plugins);
       updateHeaderVersion(result.hubVersion);
+      checkForUpdate(result.hubVersion);
     } catch (err) {
       console.error('[PluginHub] init error:', err);
       showStatus('뷰어 목록을 불러오지 못했습니다: ' + (err.message || '오류'), true);
