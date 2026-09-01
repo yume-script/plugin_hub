@@ -12,6 +12,12 @@
   // 알려주는 보조 표시일 뿐 — 실제 파일 교체는 여전히 관리자가 환경설정 화면에서 진행해야 한다.
   const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/yume-script/plugin_hub/refs/heads/main/VERSION';
   const GITHUB_REPO_URL = 'https://github.com/yume-script/plugin_hub';
+  // 매 마운트(탭 재진입)마다 GitHub에 요청을 보내면 사용자가 사이드바를 들락날락할 때마다
+  // 불필요한 외부 요청이 반복되므로, 브라우저 localStorage에 결과를 6시간 TTL로 캐시한다.
+  // localStorage를 못 쓰는 환경(프라이빗 모드 등)에서는 캐시 읽기/쓰기가 조용히 실패하고
+  // 자연히 "매번 새로 확인"으로 폴백된다.
+  const UPDATE_CHECK_CACHE_KEY = 'plugin_hub:update_check_cache';
+  const UPDATE_CHECK_TTL_MS = 6 * 60 * 60 * 1000; // 6시간
 
   function compareVersions(a, b) {
     const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
@@ -169,17 +175,49 @@
     link.textContent = `⬆ v${latestVersion} 업데이트 가능`;
   }
 
-  // GitHub 최신 VERSION과 비교해 새 버전이 있으면 배지를 띄운다. 마운트(플러그인 탭 진입)마다
-  // 1회만 확인하고, 네트워크 실패/오프라인/사내망 차단 등은 조용히 무시한다 — 이건 어디까지나
-  // 부가 안내이지 핵심 기능이 아니므로 실패해도 나머지 UI 동작에 영향을 주면 안 된다.
+  function readUpdateCheckCache() {
+    try {
+      const raw = localStorage.getItem(UPDATE_CHECK_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== 'number' || typeof parsed.latest !== 'string') return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeUpdateCheckCache(latest) {
+    try {
+      localStorage.setItem(UPDATE_CHECK_CACHE_KEY, JSON.stringify({ ts: Date.now(), latest }));
+    } catch (e) {
+      // localStorage 사용 불가 — 캐시 없이 매번 확인하는 것으로 자연히 폴백된다.
+    }
+  }
+
+  // GitHub 최신 VERSION과 비교해 새 버전이 있으면 배지를 띄운다. 캐시가 6시간 이내면 네트워크
+  // 요청 없이 캐시된 결과로만 판단하고, 캐시가 없거나 만료됐을 때만 실제로 GitHub에 확인한다.
+  // 네트워크 실패/오프라인/사내망 차단 등은 조용히 무시한다 — 이건 어디까지나 부가 안내이지
+  // 핵심 기능이 아니므로 실패해도 나머지 UI 동작에 영향을 주면 안 된다.
   async function checkForUpdate(currentVersion) {
     if (!currentVersion) return;
+
+    const cached = readUpdateCheckCache();
+    if (cached && (Date.now() - cached.ts) < UPDATE_CHECK_TTL_MS) {
+      if (compareVersions(cached.latest, currentVersion) > 0) {
+        showUpdateNotice(cached.latest);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(GITHUB_VERSION_URL, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
       const latest = data && data['plugin version'];
-      if (latest && compareVersions(latest, currentVersion) > 0) {
+      if (!latest) return;
+      writeUpdateCheckCache(latest);
+      if (compareVersions(latest, currentVersion) > 0) {
         showUpdateNotice(latest);
       }
     } catch (err) {
