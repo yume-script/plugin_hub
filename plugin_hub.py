@@ -29,7 +29,7 @@ SELF_ID = "plugin_hub"
 # 발생할 수 있다. 저장 직후(get_dashboard_data)에는 force_refresh로 캐시를 무시하고 최신값을
 # 즉시 읽어오므로 "저장했는데 안 바뀜" 문제는 생기지 않는다.
 _CONFIG_CACHE_TTL_SEC = 3.0
-_config_cache = {"data": None, "ts": 0.0}
+_config_cache = {"data": None, "session": None, "ts": 0.0}
 _enabled_cache = {}  # p_id -> (bool, ts)
 
 # 플러그인 제작 가이드(guide_plugins.md) 준수 여부 캐시. 폴더명/VERSION 파일은 설정값보다
@@ -38,6 +38,7 @@ _enabled_cache = {}  # p_id -> (bool, ts)
 _COMPLIANCE_CACHE_TTL_SEC = 60.0
 _compliance_cache = {}  # p_id -> (violation_reason_or_None, ts)
 _compliance_warned = set()  # 이미 한 번 로그를 남긴 p_id (프로세스 생애주기 동안 스팸 방지)
+_compliance_cleaned = set()  # 이미 저장 설정을 기본값으로 되돌린 p_id (프로세스 생애주기 동안 1회만)
 
 _SESSION_LABELS = {
     "general": "일반",
@@ -83,6 +84,7 @@ def _load_general_config(force_refresh=False):
         return _config_cache["data"] or {}
 
     best_data = {}
+    best_session = None
     best_ts = None
     for session in ("general", "adult", "audiobook", "video"):
         try:
@@ -104,9 +106,11 @@ def _load_general_config(force_refresh=False):
             if best_ts is None or (raw_ts is not None and raw_ts >= best_ts):
                 best_ts = raw_ts
                 best_data = data
+                best_session = session
         except Exception:
             continue
     _config_cache["data"] = best_data
+    _config_cache["session"] = best_session
     _config_cache["ts"] = now
     return best_data
 
@@ -297,6 +301,66 @@ def _is_plugin_enabled(p_id, force_refresh=False):
     return value
 
 
+def _reset_stale_hub_config_for(p_id, config):
+    """가이드 위반이 확인된 플러그인이 예전에 허브에 '합치기'/'숨기기'로 설정되어 있었다면
+    (사용자가 이미 사용 중이던 플러그인이었을 수 있음), 그 저장값을 기본값으로 되돌려서
+    실제 DB에도 다시 저장한다 (사용자 요청: "기존에 사용중인 플러그인이더라도... 기본으로
+    돌리고 밖으로 꺼내줬으면 함").
+
+    discover 단계에서 이미 category_tab을 건드리지 않으므로 화면상 탭은 원래대로 정상
+    노출되고 있지만, 그것만으로는 부족하다:
+      - 이제 이 플러그인은 카탈로그에 안 뜨니 관리자가 설정 화면에서 직접 고칠 방법이 없다.
+      - 저장값 자체를 정리하지 않으면, 나중에 다시 가이드를 준수하게 되는 순간(예: 폴더명을
+        바로잡거나 VERSION 파일을 다시 채워넣는 순간) 옛 merge/hide 값이 아무 예고 없이
+        그대로 되살아나 버린다.
+    그래서 위반이 확인되는 즉시 저장값 자체를 정리해서 "허브 밖으로 완전히 꺼낸" 상태로
+    만든다. p_id당 프로세스 생애주기 동안 1회만 시도한다(반복 정리 방지)."""
+    if p_id in _compliance_cleaned:
+        return
+    _compliance_cleaned.add(p_id)
+
+    if not isinstance(config, dict) or not config:
+        return
+
+    cleaned = dict(config)
+    changed = False
+    for session in ("general", "adult", "audiobook", "video"):
+        mode_key = f"MODE_{p_id}__{session}"
+        if cleaned.get(mode_key):
+            cleaned[mode_key] = ""
+            changed = True
+
+        order_key = f"TAB_ORDER_{session}"
+        raw_order = cleaned.get(order_key)
+        if isinstance(raw_order, str) and raw_order:
+            ids = [x for x in raw_order.split(",") if x and x != p_id]
+            new_order = ",".join(ids)
+            if new_order != raw_order:
+                cleaned[order_key] = new_order
+                changed = True
+
+    if not changed:
+        return
+
+    target_session = _config_cache.get("session") or "general"
+    try:
+        from services.plugin_db_gateway import PluginDatabaseGateway
+
+        gw = PluginDatabaseGateway(target_session)
+        gw.set_setting(f"PLUGIN_CONFIG_{SELF_ID}", json.dumps(cleaned))
+        # 방금 쓴 값을 캐시에도 즉시 반영해, 같은 요청/렌더 사이클 안에서 바로 이어서 조회해도
+        # 정리된 상태가 보이도록 한다 (다음 강제 새로고침을 기다릴 필요 없음).
+        _config_cache["data"] = cleaned
+        _config_cache["ts"] = time.time()
+        print(
+            f"[PluginHub] '{p_id}' 플러그인의 기존 허브 설정(합치기/숨기기)을 기본값으로 "
+            f"초기화하고 저장했습니다 (가이드 위반으로 허브 밖으로 제외).",
+            flush=True,
+        )
+    except Exception as e:
+        print(f"[PluginHub] '{p_id}' 설정 초기화 저장 실패: {e!r}", flush=True)
+
+
 def _check_guide_compliance_uncached(target_class, p_id):
     """플러그인 제작 가이드(guide_plugins.md) 위반 여부를 검사한다 (사용자 요청으로 추가).
 
@@ -415,8 +479,11 @@ def _discover_viewer_classes(force_refresh_config=False):
             # 가이드 이탈 플러그인은 허브 후보에서 아예 제외한다 (사용자 요청) — best_by_id에
             # 들어가지 않으므로 category_tab이 감싸이지도 않고, 카탈로그/탭 목록/설정 표에도
             # 나타나지 않는다. 즉 이 플러그인은 허브의 존재를 전혀 모르는 것처럼 자기 원래
-            # 사이드바 탭 그대로 독립적으로 계속 동작한다.
-            if _check_guide_compliance(target_class, p_id):
+            # 사이드바 탭 그대로 독립적으로 계속 동작한다. 추가로, 이미 사용 중이던 플러그인이라
+            # 저장된 설정에 merge/hide가 남아있을 수 있으므로 그 값도 기본값으로 정리해 저장한다.
+            reason = _check_guide_compliance(target_class, p_id)
+            if reason:
+                _reset_stale_hub_config_for(p_id, config)
                 continue
 
             is_unwrapped = not isinstance(desc, _DynamicPluginCategoryTab)
