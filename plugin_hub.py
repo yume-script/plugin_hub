@@ -32,6 +32,13 @@ _CONFIG_CACHE_TTL_SEC = 3.0
 _config_cache = {"data": None, "ts": 0.0}
 _enabled_cache = {}  # p_id -> (bool, ts)
 
+# 플러그인 제작 가이드(guide_plugins.md) 준수 여부 캐시. 폴더명/VERSION 파일은 설정값보다
+# 훨씬 자주 안 바뀌므로(관리자가 직접 파일을 고칠 때만) 더 긴 TTL을 쓴다. 파일시스템 stat을
+# 매 디스커버리 패스마다(사이드바 렌더링마다) 반복하지 않기 위함.
+_COMPLIANCE_CACHE_TTL_SEC = 60.0
+_compliance_cache = {}  # p_id -> (violation_reason_or_None, ts)
+_compliance_warned = set()  # 이미 한 번 로그를 남긴 p_id (프로세스 생애주기 동안 스팸 방지)
+
 _SESSION_LABELS = {
     "general": "일반",
     "adult": "성인",
@@ -290,6 +297,70 @@ def _is_plugin_enabled(p_id, force_refresh=False):
     return value
 
 
+def _check_guide_compliance_uncached(target_class, p_id):
+    """플러그인 제작 가이드(guide_plugins.md) 위반 여부를 검사한다 (사용자 요청으로 추가).
+
+    현재 검사하는 규칙은 딱 2가지뿐이다:
+
+    1. 클래스 id 규칙 — 클래스에 선언한 `id` 값이 실제로 그 클래스가 정의된 폴더명과
+       일치해야 한다. 가이드 2장 "디렉토리 구조 규격"이 전제하는 `plugins/metadata/<plugin_id>/`
+       구조를 그대로 따르는지 보는 것이다.
+    2. VERSION 파일 규칙 — 그 폴더 안에 `VERSION` 파일이 있어야 하고, `{"plugin version": "..."}`
+       형태의 유효한 JSON이어야 한다. 가이드 2장 디렉토리 구조 표에서 VERSION은 "필수" 항목으로
+       명시되어 있다.
+
+    위반 사항이 있으면 사람이 읽을 수 있는 사유 문자열을 반환하고, 문제 없으면 None을 반환한다.
+    검사 자체가 실패해도(모듈 경로를 못 얻는 등) None을 반환하지 않고 위반으로 간주한다 —
+    가이드 준수 여부가 불확실한 플러그인을 허브에 잘못 노출시키는 것보다, 애매하면 제외하는
+    쪽이 더 안전한 기본값이라고 판단했다."""
+    import os
+    import sys
+
+    try:
+        module = sys.modules.get(getattr(target_class, "__module__", None))
+        module_file = getattr(module, "__file__", None) if module else None
+        if not module_file:
+            return "플러그인 모듈 파일 경로를 확인할 수 없음"
+
+        plugin_dir = os.path.dirname(os.path.abspath(module_file))
+        folder_name = os.path.basename(plugin_dir)
+
+        if folder_name != p_id:
+            return f"클래스 id('{p_id}')가 폴더명('{folder_name}')과 다름 (가이드 2장 디렉토리 구조 규격 위반)"
+
+        version_path = os.path.join(plugin_dir, "VERSION")
+        if not os.path.isfile(version_path):
+            return "VERSION 파일이 없음 (가이드 2장 디렉토리 구조 규격상 필수)"
+
+        try:
+            with open(version_path, "r", encoding="utf-8") as f:
+                raw = f.read().strip()
+            data = json.loads(raw)
+        except Exception:
+            return "VERSION 파일이 유효한 JSON이 아님"
+
+        if not isinstance(data, dict) or not str(data.get("plugin version") or "").strip():
+            return "VERSION 파일에 'plugin version' 키가 없거나 비어있음"
+
+        return None
+    except Exception as e:
+        return f"가이드 준수 여부 검사 중 오류: {e!r}"
+
+
+def _check_guide_compliance(target_class, p_id):
+    """위 검사 결과를 짧게 캐시해서, 사이드바 렌더링마다 반복되는 파일시스템 stat을 줄인다."""
+    now = time.time()
+    cached = _compliance_cache.get(p_id)
+    if cached is not None and (now - cached[1]) < _COMPLIANCE_CACHE_TTL_SEC:
+        return cached[0]
+    reason = _check_guide_compliance_uncached(target_class, p_id)
+    _compliance_cache[p_id] = (reason, now)
+    if reason and p_id not in _compliance_warned:
+        _compliance_warned.add(p_id)
+        print(f"[PluginHub] '{p_id}' 플러그인은 허브 대상에서 제외됨 (가이드 위반: {reason})", flush=True)
+    return reason
+
+
 def _discover_viewer_classes(force_refresh_config=False):
     """category_tab 을 가진 (자신 제외, 설정에서 제외 처리된 id 제외) 설치 플러그인 탐색 및 동적 디스크립터 바인딩.
     정지(비활성) 플러그인도 포함해서 반환하되 enabled 플래그로 구분한다
@@ -339,6 +410,13 @@ def _discover_viewer_classes(force_refresh_config=False):
                 if isinstance(raw_tab, dict):
                     orig_tab = raw_tab
             if not isinstance(orig_tab, dict):
+                continue
+
+            # 가이드 이탈 플러그인은 허브 후보에서 아예 제외한다 (사용자 요청) — best_by_id에
+            # 들어가지 않으므로 category_tab이 감싸이지도 않고, 카탈로그/탭 목록/설정 표에도
+            # 나타나지 않는다. 즉 이 플러그인은 허브의 존재를 전혀 모르는 것처럼 자기 원래
+            # 사이드바 탭 그대로 독립적으로 계속 동작한다.
+            if _check_guide_compliance(target_class, p_id):
                 continue
 
             is_unwrapped = not isinstance(desc, _DynamicPluginCategoryTab)
