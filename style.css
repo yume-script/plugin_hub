@@ -156,6 +156,37 @@
   position: relative;
 }
 
+/* 앱 전체 다른 영역의 얇은 스크롤바와 톤을 맞춘다. html/body처럼 페이지 전역에 거는
+   대신 .uf-panes와 그 안쪽(병합된 뷰어가 마운트하는 자기 내부 스크롤 컨테이너 포함)에만
+   스코프해서, 다른 화면 디자인에는 전혀 영향이 없다. */
+.uf-panes,
+.uf-panes * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.uf-panes::-webkit-scrollbar,
+.uf-panes *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.uf-panes::-webkit-scrollbar-track,
+.uf-panes *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.uf-panes::-webkit-scrollbar-thumb,
+.uf-panes *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+.uf-panes::-webkit-scrollbar-thumb:hover,
+.uf-panes *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
 .uf-status {
   padding: 40px 16px;
   text-align: center;
