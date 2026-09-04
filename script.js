@@ -5,6 +5,37 @@
   const root = document.querySelector('[data-uf-root]');
   if (!root) return;
 
+  // 화면(뷰포트) 높이에 안 맞고 스크롤이 생기는 문제 대응. `.uf-plugin { height: 100% }`는
+  // 부모 요소들이 전부 명시적인 height를 갖고 있어야만 실제로 동작하는데, 코어가 이 플러그인을
+  // 마운트하는 컨테이너 체인 중 어딘가가 height: auto(내용에 따라 늘어나는 방식)이면 100%가
+  // 0으로 무너지거나 무제한으로 늘어나 버려서, 원래 .uf-panes 안에서만 나야 할 스크롤이 페이지
+  // 전체 스크롤로 새버린다. 그래서 부모 체인에 기대는 대신 뷰포트 높이(window.innerHeight)에서
+  // 루트 요소의 화면상 y좌표(top)를 뺀 실제 픽셀 값을 직접 계산해 인라인으로 고정한다.
+  function fitToViewportHeight() {
+    try {
+      const top = root.getBoundingClientRect().top;
+      const available = Math.max(240, Math.floor(window.innerHeight - top));
+      root.style.height = `${available}px`;
+    } catch (e) {
+      /* noop */
+    }
+  }
+
+  fitToViewportHeight();
+  window.addEventListener('resize', fitToViewportHeight);
+  // 코어 레이아웃이 리사이즈 이벤트 없이도 바뀔 수 있는 경우(사이드바 접기/펼치기 등)에
+  // 대비해, 화면 크기 변화를 폭넓게 잡아내는 ResizeObserver도 함께 건다(부모 요소 크기 변화
+  // 감지용 — root 자신이 아니라 root의 부모를 관찰해야 한다. 지원 안 하는 구형 브라우저에서는
+  // 조용히 건너뛴다).
+  try {
+    if (typeof ResizeObserver === 'function' && root.parentElement) {
+      const ro = new ResizeObserver(() => fitToViewportHeight());
+      ro.observe(root.parentElement);
+    }
+  } catch (e) {
+    /* noop */
+  }
+
   // GitHub 저장소의 VERSION 파일을 직접 조회해 최신 버전과 비교한다 (사용자 요청).
   // raw.githubusercontent.com은 기본적으로 CORS를 열어주므로 서버 프록시 없이 브라우저에서
   // 바로 fetch 가능하다. update_manifest(코어 관리자 화면의 "샘플 업데이트" 버튼용)와 같은
@@ -397,6 +428,11 @@
     } catch (err) {
       console.error('[PluginHub] init error:', err);
       showStatus('뷰어 목록을 불러오지 못했습니다: ' + (err.message || '오류'), true);
+    } finally {
+      // 탭/상태 렌더링 직후 한 번, 그리고 폰트 로딩·사이드바 애니메이션처럼 뒤늦게 끝나는
+      // 레이아웃 변화까지 잡기 위해 약간의 지연을 두고 한 번 더 재계산한다.
+      fitToViewportHeight();
+      setTimeout(fitToViewportHeight, 300);
     }
   }
 
