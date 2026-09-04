@@ -59,31 +59,10 @@
   // 병합된 뷰어(M3U 플레이어 등)는 자기 채널 목록을 비동기로 채우는 등, 마운트 직후에도
   // DOM이 한동안 계속 바뀔 수 있다. 그 시점을 고정된 타이머로 추측하는 대신, panes 내부
   // DOM 변화를 직접 관찰해서 바뀔 때마다(짧게 디바운스해서) 높이를 다시 보정한다.
-  // 병합된 뷰어(bundle.css)는 <style> 태그로 스코프 없이 통째로 주입되기 때문에, 그
-  // 뷰어가 자기 채널 목록용으로 정의한 스크롤바 커스텀 스타일(예: 두껍고 튀는 색상의
-  // ::-webkit-scrollbar)이 페이지 전체(html/body)로 새어나갈 수 있다. 그러면 위
-  // 자기보정 루프로 오버플로우를 0에 최대한 가깝게 줄여도, 아주 미세하게 남는 순간에
-  // 그 스타일 그대로 굵고 눈에 띄는 막대로 렌더링되어 버린다. html/body의 스크롤바
-  // 모양만큼은 항상 브라우저 기본값으로 강제 복원해서, 어떤 병합 뷰어가 무슨 스크롤바
-  // 스타일을 페이지 전체에 흘려보내든 html/body에는 영향이 없도록 방어한다(뷰어 자신의
-  // 콘텐츠 안쪽 스크롤바 스타일은 그대로 유지됨 — html/body 선택자만 되돌린다).
-  try {
-    if (!document.head.querySelector('[data-uf-scrollbar-guard]')) {
-      const guardStyle = document.createElement('style');
-      guardStyle.setAttribute('data-uf-scrollbar-guard', SELF_ID);
-      guardStyle.textContent = `
-        html::-webkit-scrollbar, html::-webkit-scrollbar-thumb, html::-webkit-scrollbar-track,
-        body::-webkit-scrollbar, body::-webkit-scrollbar-thumb, body::-webkit-scrollbar-track {
-          all: revert !important;
-        }
-        html, body { scrollbar-color: auto !important; }
-      `;
-      document.head.appendChild(guardStyle);
-    }
-  } catch (e) {
-    /* noop */
-  }
-
+  // (v2.13.1에서 html/body 스크롤바 모양을 강제로 되돌리는 방어 스타일을 추가했었으나,
+  // 앱 전체 디자인과 어긋나 보인다는 피드백으로 v2.13.2에서 제거했다. html/body 스크롤바는
+  // 이제 앱의 전역 CSS/테마를 그대로 따른다 — 위 자기보정 루프로 오버플로우 자체를 최대한
+  // 없애는 것만으로 대응한다.)
   let fitDebounceTimer = null;
   function scheduleFit() {
     if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
