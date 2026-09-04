@@ -14,8 +14,24 @@
   function fitToViewportHeight() {
     try {
       const top = root.getBoundingClientRect().top;
-      const available = Math.max(240, Math.floor(window.innerHeight - top));
-      root.style.height = `${available}px`;
+      const initial = Math.max(240, Math.floor(window.innerHeight - top));
+      root.style.height = `${initial}px`;
+
+      // 계산 하나만으로는 코어 레이아웃에 우리가 모르는 요소(하단 고정 바, 실제
+      // 가시 영역과 window.innerHeight의 오차 등)가 있을 때 못 잡아낼 수 있다. 그래서
+      // 적용 직후 문서 전체에 실제로 세로 스크롤이 남아있는지 다시 측정해서, 남아있으면
+      // 그 초과분만큼 우리 쪽 높이를 한 번 더 줄이는 보정을 거친다(최대 3회, 무한루프 방지).
+      // 원인이 무엇이든 우리 플러그인의 높이를 줄이면 사라지는 종류의 오버플로우라면
+      // 이 루프가 수렴해서 없애준다.
+      for (let i = 0; i < 3; i += 1) {
+        const doc = document.documentElement;
+        const overflow = doc.scrollHeight - doc.clientHeight;
+        if (overflow <= 1) break;
+        const current = root.getBoundingClientRect().height;
+        const next = Math.floor(current - overflow);
+        if (next < 240 || next >= current) break;
+        root.style.height = `${next}px`;
+      }
     } catch (e) {
       /* noop */
     }
@@ -34,6 +50,18 @@
     }
   } catch (e) {
     /* noop */
+  }
+
+  // 병합된 뷰어(M3U 플레이어 등)는 자기 채널 목록을 비동기로 채우는 등, 마운트 직후에도
+  // DOM이 한동안 계속 바뀔 수 있다. 그 시점을 고정된 타이머로 추측하는 대신, panes 내부
+  // DOM 변화를 직접 관찰해서 바뀔 때마다(짧게 디바운스해서) 높이를 다시 보정한다.
+  let fitDebounceTimer = null;
+  function scheduleFit() {
+    if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
+    fitDebounceTimer = setTimeout(() => {
+      fitDebounceTimer = null;
+      fitToViewportHeight();
+    }, 80);
   }
 
   // GitHub 저장소의 VERSION 파일을 직접 조회해 최신 버전과 비교한다 (사용자 요청).
@@ -67,6 +95,18 @@
   const statusEl = $('status');
   const settingsBtn = $('open-settings');
   const versionEl = $('header-version');
+
+  // panes 내부 DOM이 바뀔 때마다(병합된 뷰어가 자기 콘텐츠를 비동기로 채우는 경우 포함)
+  // 높이를 다시 보정한다.
+  try {
+    if (typeof MutationObserver === 'function' && panesEl) {
+      const mo = new MutationObserver(() => scheduleFit());
+      mo.observe(panesEl, { childList: true, subtree: true });
+    }
+  } catch (e) {
+    /* noop */
+  }
+
 
   let plugins = [];
   let activeId = null;
@@ -300,10 +340,14 @@
       } catch (err) {
         console.error(`[PluginHub] ${plugin.id} 스크립트 실행 오류:`, err);
         showStatus((plugin.title || plugin.id) + ' 스크립트 오류: ' + (err.message || '오류'), true);
+        fitToViewportHeight();
         return;
       }
     }
     hideStatus();
+    // 마운트 직후 즉시 한 번 보정하고, 이후의 비동기 렌더링 변화는 위 MutationObserver가
+    // scheduleFit()으로 이어서 잡는다.
+    fitToViewportHeight();
   }
 
   async function activate(pluginId) {
