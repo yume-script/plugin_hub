@@ -20,15 +20,19 @@
       // 계산 하나만으로는 코어 레이아웃에 우리가 모르는 요소(하단 고정 바, 실제
       // 가시 영역과 window.innerHeight의 오차 등)가 있을 때 못 잡아낼 수 있다. 그래서
       // 적용 직후 문서 전체에 실제로 세로 스크롤이 남아있는지 다시 측정해서, 남아있으면
-      // 그 초과분만큼 우리 쪽 높이를 한 번 더 줄이는 보정을 거친다(최대 3회, 무한루프 방지).
-      // 원인이 무엇이든 우리 플러그인의 높이를 줄이면 사라지는 종류의 오버플로우라면
-      // 이 루프가 수렴해서 없애준다.
-      for (let i = 0; i < 3; i += 1) {
+      // 그 초과분만큼 우리 쪽 높이를 한 번 더 줄이는 보정을 거친다(최대 5회, 무한루프 방지).
+      // 목표를 0px 초과분보다 여유 있게(버퍼 4px) 잡는 이유: 병합된 뷰어가 스크롤바
+      // 색상/두께를 커스텀 스타일링(예: 주황색 두꺼운 스크롤바)한 CSS가 스코프 없이
+      // 페이지 전체에 새어나가면, 남은 오버플로우가 1px 미만이라도 그 스타일링 그대로
+      // 굵고 눈에 띄는 막대로 렌더링될 수 있기 때문에, 애매하게 0에 걸치지 않고
+      // 확실히 0 아래로 내려가게 한다.
+      const OVERFLOW_BUFFER_PX = 4;
+      for (let i = 0; i < 5; i += 1) {
         const doc = document.documentElement;
         const overflow = doc.scrollHeight - doc.clientHeight;
-        if (overflow <= 1) break;
+        if (overflow <= 0) break;
         const current = root.getBoundingClientRect().height;
-        const next = Math.floor(current - overflow);
+        const next = Math.floor(current - overflow - OVERFLOW_BUFFER_PX);
         if (next < 240 || next >= current) break;
         root.style.height = `${next}px`;
       }
@@ -55,6 +59,31 @@
   // 병합된 뷰어(M3U 플레이어 등)는 자기 채널 목록을 비동기로 채우는 등, 마운트 직후에도
   // DOM이 한동안 계속 바뀔 수 있다. 그 시점을 고정된 타이머로 추측하는 대신, panes 내부
   // DOM 변화를 직접 관찰해서 바뀔 때마다(짧게 디바운스해서) 높이를 다시 보정한다.
+  // 병합된 뷰어(bundle.css)는 <style> 태그로 스코프 없이 통째로 주입되기 때문에, 그
+  // 뷰어가 자기 채널 목록용으로 정의한 스크롤바 커스텀 스타일(예: 두껍고 튀는 색상의
+  // ::-webkit-scrollbar)이 페이지 전체(html/body)로 새어나갈 수 있다. 그러면 위
+  // 자기보정 루프로 오버플로우를 0에 최대한 가깝게 줄여도, 아주 미세하게 남는 순간에
+  // 그 스타일 그대로 굵고 눈에 띄는 막대로 렌더링되어 버린다. html/body의 스크롤바
+  // 모양만큼은 항상 브라우저 기본값으로 강제 복원해서, 어떤 병합 뷰어가 무슨 스크롤바
+  // 스타일을 페이지 전체에 흘려보내든 html/body에는 영향이 없도록 방어한다(뷰어 자신의
+  // 콘텐츠 안쪽 스크롤바 스타일은 그대로 유지됨 — html/body 선택자만 되돌린다).
+  try {
+    if (!document.head.querySelector('[data-uf-scrollbar-guard]')) {
+      const guardStyle = document.createElement('style');
+      guardStyle.setAttribute('data-uf-scrollbar-guard', SELF_ID);
+      guardStyle.textContent = `
+        html::-webkit-scrollbar, html::-webkit-scrollbar-thumb, html::-webkit-scrollbar-track,
+        body::-webkit-scrollbar, body::-webkit-scrollbar-thumb, body::-webkit-scrollbar-track {
+          all: revert !important;
+        }
+        html, body { scrollbar-color: auto !important; }
+      `;
+      document.head.appendChild(guardStyle);
+    }
+  } catch (e) {
+    /* noop */
+  }
+
   let fitDebounceTimer = null;
   function scheduleFit() {
     if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
