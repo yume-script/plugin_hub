@@ -5,72 +5,13 @@
   const root = document.querySelector('[data-uf-root]');
   if (!root) return;
 
-  // 화면(뷰포트) 높이에 안 맞고 스크롤이 생기는 문제 대응. `.uf-plugin { height: 100% }`는
-  // 부모 요소들이 전부 명시적인 height를 갖고 있어야만 실제로 동작하는데, 코어가 이 플러그인을
-  // 마운트하는 컨테이너 체인 중 어딘가가 height: auto(내용에 따라 늘어나는 방식)이면 100%가
-  // 0으로 무너지거나 무제한으로 늘어나 버려서, 원래 .uf-panes 안에서만 나야 할 스크롤이 페이지
-  // 전체 스크롤로 새버린다. 그래서 부모 체인에 기대는 대신 뷰포트 높이(window.innerHeight)에서
-  // 루트 요소의 화면상 y좌표(top)를 뺀 실제 픽셀 값을 직접 계산해 인라인으로 고정한다.
-  function fitToViewportHeight() {
-    try {
-      const top = root.getBoundingClientRect().top;
-      const initial = Math.max(240, Math.floor(window.innerHeight - top));
-      root.style.height = `${initial}px`;
-
-      // 계산 하나만으로는 코어 레이아웃에 우리가 모르는 요소(하단 고정 바, 실제
-      // 가시 영역과 window.innerHeight의 오차 등)가 있을 때 못 잡아낼 수 있다. 그래서
-      // 적용 직후 문서 전체에 실제로 세로 스크롤이 남아있는지 다시 측정해서, 남아있으면
-      // 그 초과분만큼 우리 쪽 높이를 한 번 더 줄이는 보정을 거친다(최대 5회, 무한루프 방지).
-      // 목표를 0px 초과분보다 여유 있게(버퍼 4px) 잡는 이유: 병합된 뷰어가 스크롤바
-      // 색상/두께를 커스텀 스타일링(예: 주황색 두꺼운 스크롤바)한 CSS가 스코프 없이
-      // 페이지 전체에 새어나가면, 남은 오버플로우가 1px 미만이라도 그 스타일링 그대로
-      // 굵고 눈에 띄는 막대로 렌더링될 수 있기 때문에, 애매하게 0에 걸치지 않고
-      // 확실히 0 아래로 내려가게 한다.
-      const OVERFLOW_BUFFER_PX = 4;
-      for (let i = 0; i < 5; i += 1) {
-        const doc = document.documentElement;
-        const overflow = doc.scrollHeight - doc.clientHeight;
-        if (overflow <= 0) break;
-        const current = root.getBoundingClientRect().height;
-        const next = Math.floor(current - overflow - OVERFLOW_BUFFER_PX);
-        if (next < 240 || next >= current) break;
-        root.style.height = `${next}px`;
-      }
-    } catch (e) {
-      /* noop */
-    }
-  }
-
-  fitToViewportHeight();
-  window.addEventListener('resize', fitToViewportHeight);
-  // 코어 레이아웃이 리사이즈 이벤트 없이도 바뀔 수 있는 경우(사이드바 접기/펼치기 등)에
-  // 대비해, 화면 크기 변화를 폭넓게 잡아내는 ResizeObserver도 함께 건다(부모 요소 크기 변화
-  // 감지용 — root 자신이 아니라 root의 부모를 관찰해야 한다. 지원 안 하는 구형 브라우저에서는
-  // 조용히 건너뛴다).
-  try {
-    if (typeof ResizeObserver === 'function' && root.parentElement) {
-      const ro = new ResizeObserver(() => fitToViewportHeight());
-      ro.observe(root.parentElement);
-    }
-  } catch (e) {
-    /* noop */
-  }
-
-  // 병합된 뷰어(M3U 플레이어 등)는 자기 채널 목록을 비동기로 채우는 등, 마운트 직후에도
-  // DOM이 한동안 계속 바뀔 수 있다. 그 시점을 고정된 타이머로 추측하는 대신, panes 내부
-  // DOM 변화를 직접 관찰해서 바뀔 때마다(짧게 디바운스해서) 높이를 다시 보정한다.
-  // (v2.13.1에서 html/body 스크롤바 모양을 강제로 되돌리는 방어 스타일을 추가했었으나,
-  // 앱 전체 디자인과 어긋나 보인다는 피드백으로 v2.13.2에서 제거했다. html/body 스크롤바는
-  // 이제 앱의 전역 CSS/테마를 그대로 따른다 — 위 자기보정 루프로 오버플로우 자체를 최대한
-  // 없애는 것만으로 대응한다.)
-  let fitDebounceTimer = null;
-  function scheduleFit() {
-    if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
-    fitDebounceTimer = setTimeout(() => {
-      fitDebounceTimer = null;
-      fitToViewportHeight();
-    }, 80);
-  }
+  // 코어 상단 탭(일반 도서/성인 도서/...)이 고정(sticky/fixed)되어 있고 그 아래 콘텐츠는
+  // 원래 페이지 전체 스크롤로 동작하는 구조다. 이전 버전들은 이 페이지 레벨 스크롤을 없애려고
+  // window.innerHeight 기반으로 우리 쪽 높이를 픽셀 단위로 계산·보정하는 JS를 여러 겹 추가했지만,
+  // 코어 레이아웃에 대한 가정(상단 바 높이, 고정 여부 등)이 계속 어긋나면서 오히려 다른 부작용
+  // (스크롤바 색상 누출 등)만 낳았다. 근본적으로 페이지 전체 스크롤 자체는 이 구조에서 자연스러운
+  // 것이므로, 이제 그 스크롤을 억지로 막지 않는다 — 대신 아래에서 허브의 제목/탭 바를
+  // position: sticky로 고정해, 스크롤을 내려도 항상 보이도록 UX만 보완한다(style.css 참고).
 
   // GitHub 저장소의 VERSION 파일을 직접 조회해 최신 버전과 비교한다 (사용자 요청).
   // raw.githubusercontent.com은 기본적으로 CORS를 열어주므로 서버 프록시 없이 브라우저에서
@@ -103,18 +44,6 @@
   const statusEl = $('status');
   const settingsBtn = $('open-settings');
   const versionEl = $('header-version');
-
-  // panes 내부 DOM이 바뀔 때마다(병합된 뷰어가 자기 콘텐츠를 비동기로 채우는 경우 포함)
-  // 높이를 다시 보정한다.
-  try {
-    if (typeof MutationObserver === 'function' && panesEl) {
-      const mo = new MutationObserver(() => scheduleFit());
-      mo.observe(panesEl, { childList: true, subtree: true });
-    }
-  } catch (e) {
-    /* noop */
-  }
-
 
   let plugins = [];
   let activeId = null;
@@ -348,14 +277,10 @@
       } catch (err) {
         console.error(`[PluginHub] ${plugin.id} 스크립트 실행 오류:`, err);
         showStatus((plugin.title || plugin.id) + ' 스크립트 오류: ' + (err.message || '오류'), true);
-        fitToViewportHeight();
         return;
       }
     }
     hideStatus();
-    // 마운트 직후 즉시 한 번 보정하고, 이후의 비동기 렌더링 변화는 위 MutationObserver가
-    // scheduleFit()으로 이어서 잡는다.
-    fitToViewportHeight();
   }
 
   async function activate(pluginId) {
@@ -480,11 +405,6 @@
     } catch (err) {
       console.error('[PluginHub] init error:', err);
       showStatus('뷰어 목록을 불러오지 못했습니다: ' + (err.message || '오류'), true);
-    } finally {
-      // 탭/상태 렌더링 직후 한 번, 그리고 폰트 로딩·사이드바 애니메이션처럼 뒤늦게 끝나는
-      // 레이아웃 변화까지 잡기 위해 약간의 지연을 두고 한 번 더 재계산한다.
-      fitToViewportHeight();
-      setTimeout(fitToViewportHeight, 300);
     }
   }
 
