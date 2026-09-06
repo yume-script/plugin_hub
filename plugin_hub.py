@@ -581,12 +581,22 @@ class _DynamicCategoryTab:
     _TAB = {
         "title": "플러그인 허브",
         "icon": "fa-solid fa-object-group",
-        "order": 89,
+        "order": 10,
         "sessions": "all",
     }
 
     def __get__(self, obj, objtype=None):
-        _apply_session_overrides()
+        # _apply_session_overrides()는 내부적으로 다른 모든 플러그인을 다시 훑는 무거운
+        # 디스커버리를 실행한다. 그 안의 각 단계는 이미 개별 try/except로 방어되어 있지만,
+        # 혹시라도 예상 못한 예외가 여기까지 올라오면 이 category_tab 자체를 읽는 동작이
+        # 실패해서 플러그인 허브 탭이 사이드바에서 통째로 사라질 위험이 있다(사용자가 실제로
+        # 겪은 "재시작 후 허브가 사라짐" 증상의 유력한 원인 후보). 그래서 여기서 마지막
+        # 안전망으로 한 번 더 감싸서, 무슨 일이 있어도 최소한 이 탭 dict 자체는 항상
+        # 반환되도록 보장한다.
+        try:
+            _apply_session_overrides()
+        except Exception as e:
+            print(f"[PluginHub] category_tab 조회 중 디스커버리 예외(허브 탭 자체는 정상 반환): {e!r}", flush=True)
         return dict(self._TAB)
 
 
@@ -641,7 +651,7 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
     category_tab = {
         "title": "플러그인 허브",
         "icon": "fa-solid fa-object-group",
-        "order": 89,
+        "order": 10,
         "sessions": "all",
     }
 
