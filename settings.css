@@ -1,6 +1,6 @@
 .pv-settings-desc {
   margin: 0 0 16px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
   font-size: 13px;
   line-height: 1.6;
 }
@@ -10,7 +10,7 @@
 .pv-table-wrap {
   margin-bottom: 24px;
   overflow-x: auto;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
   border-radius: 10px;
 }
 
@@ -22,7 +22,7 @@
   width: 100%;
   min-width: 480px;
   border-collapse: collapse;
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  background: var(--app-bg-card, var(--bo-surface, rgba(255, 255, 255, 0.04)));
 }
 
 .pv-table thead th {
@@ -33,9 +33,9 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: var(--bo-text-secondary, #9a9a9a);
-  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
-  border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
+  background: var(--app-bg-card-hover, var(--bo-hover-bg, rgba(255, 255, 255, 0.08)));
+  border-bottom: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
   white-space: nowrap;
 }
 
@@ -44,11 +44,11 @@
 }
 
 .pv-table tbody tr + tr {
-  border-top: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.08)));
 }
 
 .pv-table tbody tr:hover {
-  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.04));
+  background: var(--app-bg-card-hover, var(--bo-hover-bg, rgba(255, 255, 255, 0.04)));
 }
 
 .pv-row-name {
@@ -62,13 +62,13 @@
 .pv-row-title {
   font-weight: 600;
   font-size: 13px;
-  color: var(--bo-text-primary, #fff);
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
 }
 
 .pv-row-meta {
   margin-top: 2px;
   font-size: 11px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
 }
 
 .pv-row-badge {
@@ -92,7 +92,7 @@
 .pv-cell-na {
   padding: 6px 10px;
   text-align: center;
-  color: var(--bo-text-secondary, #6b6b6b);
+  color: var(--app-text-muted, var(--bo-text-secondary, #6b6b6b));
 }
 
 .pv-cell select {
@@ -100,9 +100,9 @@
   min-width: 108px;
   padding: 4px 6px;
   border-radius: 6px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
-  color: var(--bo-text-primary, #fff);
+  border: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
+  background: var(--app-bg-card, var(--bo-surface, rgba(255, 255, 255, 0.04)));
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
   font-size: 12px;
   cursor: pointer;
 }
@@ -115,7 +115,7 @@
 .pv-settings-empty,
 .pv-settings-error {
   padding: 24px 4px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
   font-size: 13px;
 }
 
@@ -126,7 +126,7 @@
 /* ---- 세션 레인 ---- */
 
 .pv-lanes-wrap {
-  border-top: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  border-top: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
   padding-top: 16px;
 }
 
@@ -134,7 +134,7 @@
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--bo-text-primary, #fff);
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
 }
 
 .pv-lanes {
@@ -144,7 +144,7 @@
 }
 
 .pv-lane {
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
   border-radius: 10px;
   overflow: hidden;
 }
@@ -153,9 +153,9 @@
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--bo-text-secondary, #9a9a9a);
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
-  border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
+  background: var(--app-bg-card, var(--bo-surface, rgba(255, 255, 255, 0.04)));
+  border-bottom: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
 }
 
 .pv-lane-body {
@@ -169,12 +169,12 @@
 .pv-lane-body.pv-lane-empty::before {
   content: "표시된 플러그인 없음";
   font-size: 12px;
-  color: var(--bo-text-secondary, #6b6b6b);
+  color: var(--app-text-muted, var(--bo-text-secondary, #6b6b6b));
   padding: 6px 2px;
 }
 
 .pv-lane-body.pv-drop-ok {
-  outline: 2px dashed var(--bo-accent, #7c5cff);
+  outline: 2px dashed var(--app-accent, var(--bo-accent, #7c5cff));
   outline-offset: -2px;
 }
 
@@ -190,8 +190,8 @@
   gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
-  color: var(--bo-text-primary, #fff);
+  background: var(--app-bg-card-hover, var(--bo-hover-bg, rgba(255, 255, 255, 0.08)));
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
   font-size: 12px;
   cursor: grab;
   user-select: none;
@@ -210,7 +210,7 @@
 .pv-chip-x {
   border: none;
   background: transparent;
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
@@ -224,7 +224,7 @@
 /* ---- 제외 플러그인 목록 ---- */
 
 .pv-excluded-wrap {
-  border-top: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  border-top: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
   padding-top: 16px;
   margin-top: 16px;
 }
@@ -234,7 +234,7 @@
 }
 
 .pv-excluded-desc code {
-  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
+  background: var(--app-bg-card-hover, var(--bo-hover-bg, rgba(255, 255, 255, 0.08)));
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12px;
@@ -245,15 +245,15 @@
   box-sizing: border-box;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
-  color: var(--bo-text-primary, #fff);
+  border: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
+  background: var(--app-bg-card, var(--bo-surface, rgba(255, 255, 255, 0.04)));
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
   font-size: 13px;
 }
 
 .pv-excluded-input:focus {
   outline: none;
-  border-color: var(--bo-accent, #7c5cff);
+  border-color: var(--app-accent, var(--bo-accent, #7c5cff));
 }
 
 /* ---- 일괄 선택/해제 툴바 ---- */
@@ -269,9 +269,9 @@
 .pv-bulk-btn {
   padding: 6px 12px;
   border-radius: 8px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
-  color: var(--bo-text-primary, #fff);
+  border: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
+  background: var(--app-bg-card, var(--bo-surface, rgba(255, 255, 255, 0.04)));
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -279,10 +279,10 @@
 }
 
 .pv-bulk-btn:hover {
-  background: var(--bo-hover-bg, rgba(255, 255, 255, 0.08));
+  background: var(--app-bg-card-hover, var(--bo-hover-bg, rgba(255, 255, 255, 0.08)));
 }
 
 .pv-bulk-note {
   font-size: 11px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted, var(--bo-text-secondary, #9a9a9a));
 }
