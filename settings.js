@@ -17,6 +17,7 @@
   const grid = root.querySelector('[data-pv-role="grid"]');
   const lanesEl = root.querySelector('[data-pv-role="lanes"]');
   const excludedInput = root.querySelector('[data-pv-role="excluded-input"]');
+  const hideTitleBarInput = root.querySelector('[data-pv-role="hide-title-bar-input"]');
   const selectAllBtn = root.querySelector('[data-pv-role="select-all"]');
   const deselectAllBtn = root.querySelector('[data-pv-role="deselect-all"]');
   if (!grid || !lanesEl) return;
@@ -364,6 +365,9 @@
       renderLanes(catalog, data.orders || {});
       if (excludedInput && typeof data.excluded_ids === 'string') {
         excludedInput.value = data.excluded_ids;
+      }
+      if (hideTitleBarInput) {
+        hideTitleBarInput.checked = !!data.hide_title_bar;
       }
     } catch (err) {
       console.error('[PluginHub-Settings] load error:', err);

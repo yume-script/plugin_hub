@@ -732,6 +732,9 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
 
         orders = {s: _session_order(config, s) for s in _SESSION_LABELS}
         excluded_ids_str = str(config.get("EXCLUDED_IDS", _DEFAULT_EXCLUDED_IDS))
+        # 체크박스 name="HIDE_TITLE_BAR" value="1" — 코어 저장 폼은 체크 해제된 체크박스는
+        # 아예 전송하지 않으므로, config에 키가 없거나 빈 값이면 "숨기지 않음"(기본값)이다.
+        hide_title_bar = str(config.get("HIDE_TITLE_BAR") or "").strip() not in ("", "0", "false", "False")
 
         return {
             "success": True,
@@ -740,6 +743,7 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
             "orders": orders,
             "excluded_ids": excluded_ids_str,
             "hub_version": _read_plugin_version(SELF_ID),
+            "hide_title_bar": hide_title_bar,
         }
 
 

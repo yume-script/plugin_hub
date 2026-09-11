@@ -256,6 +256,25 @@
   border-color: var(--app-accent, var(--bo-accent, #7c5cff));
 }
 
+/* ---- 화면 표시 체크박스 ---- */
+
+.pv-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
+  cursor: pointer;
+  user-select: none;
+}
+
+.pv-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--app-accent, var(--bo-accent, #7c5cff));
+  cursor: pointer;
+}
+
 /* ---- 일괄 선택/해제 툴바 ---- */
 
 .pv-bulk-toolbar {

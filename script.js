@@ -159,12 +159,21 @@
     return {
       viewers: Array.isArray(data.viewers) ? data.viewers : [],
       hubVersion: typeof data.hub_version === 'string' ? data.hub_version : '',
+      hideTitleBar: !!data.hide_title_bar,
     };
   }
 
   function updateHeaderVersion(version) {
     if (!versionEl) return;
     versionEl.textContent = version ? `v${version}` : '';
+  }
+
+  // 설정 화면의 "제목 표시줄 상시 숨기기" 체크박스 값을 반영한다. 아이콘/이름/버전 배지가
+  // 있는 맨 위 줄(.uf-topbar)만 숨기고, 그 아래 탭 목록 줄(.uf-tabsbar)은 그대로 둔다.
+  function applyTitleBarVisibility(hide) {
+    const topbarEl = root.querySelector('.uf-topbar');
+    if (!topbarEl) return;
+    topbarEl.classList.toggle('uf-hidden', !!hide);
   }
 
   function showUpdateNotice(latestVersion) {
@@ -378,6 +387,7 @@
       renderTabs();
       cleanUpSidebarTabs(plugins);
       updateHeaderVersion(result.hubVersion);
+      applyTitleBarVisibility(result.hideTitleBar);
     } catch (err) {
       console.error('[PluginHub] reload error:', err);
     }
@@ -401,6 +411,7 @@
       renderTabs();
       cleanUpSidebarTabs(plugins);
       updateHeaderVersion(result.hubVersion);
+      applyTitleBarVisibility(result.hideTitleBar);
       checkForUpdate(result.hubVersion);
     } catch (err) {
       console.error('[PluginHub] init error:', err);

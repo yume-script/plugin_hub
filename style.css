@@ -198,6 +198,10 @@
   color: var(--bo-error, #e5484d);
 }
 
+.uf-topbar.uf-hidden {
+  display: none;
+}
+
 .uf-status.uf-hidden {
   display: none;
 }
