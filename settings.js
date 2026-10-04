@@ -256,7 +256,7 @@
         <tr class="pv-row${isEnabled ? '' : ' pv-row-disabled'}">
           <th scope="row" class="pv-row-name">
             <div class="pv-row-title">${esc(p.name)}</div>
-            <div class="pv-row-meta">${esc(p.id)}${version ? ` · ${version}` : ''}${isEnabled ? '' : ' · <span class="pv-row-badge">정지됨</span>'}</div>
+            <div class="pv-row-meta">${esc(p.id)}${version ? ` · ${version}` : ''}${isEnabled ? '' : ' · <span class="pv-row-badge">정지됨</span>'}${p.admin_only ? ' · <span class="pv-row-badge-info" title="admin_only 플러그인 — 허브에 합쳐도 일반 사용자에게는 보이지 않습니다">관리자 전용</span>' : ''}</div>
           </th>
           ${sessionCells}
         </tr>`;

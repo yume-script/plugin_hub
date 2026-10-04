@@ -76,6 +76,18 @@
   font-weight: 600;
 }
 
+.pv-row-badge-info {
+  color: var(--app-accent, var(--bo-accent, #7c5cff));
+  font-weight: 600;
+}
+
+.pv-user-note {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--app-bg-card, var(--bo-surface, rgba(255, 255, 255, 0.04)));
+  border: 1px solid var(--app-border, var(--bo-border-color, rgba(255, 255, 255, 0.1)));
+}
+
 .pv-row-disabled {
   opacity: 0.55;
 }

@@ -13,6 +13,9 @@
   오버라이드하여 사이드바 개별 탭에서 실시간으로 숨긴다.
 - 프론트엔드는 get_dashboard_data 로 현재 세션의 탭 목록을 받고,
   각 뷰어의 UI 번들은 /api/media/plugins/<id>/ui 로 조회해 직접 마운트한다.
+- 다중 사용자(v3.3.0): 허브 설정은 관리자 전역 설정이고, 허브 탭 목록은 요청한 사용자 기준으로
+  거른다. 일반 사용자는 관리자 > 사용자 권한에서 허용된(🧩 PERM_CATEGORY_<uid>_plugin_<id>)
+  플러그인만 보이며, admin_only 플러그인은 보이지 않는다.
 """
 
 import json
@@ -222,6 +225,138 @@ def _current_request_session():
     return None
 
 
+# ---------------------------------------------------------------------------
+# 다중 사용자 지원 (v3.3.0)
+#
+# 허브 설정(합치기/숨기기/탭 순서)은 관리자가 정하는 "전역" 설정이지만, 실제로 허브 안에
+# 무엇이 보이는지는 "지금 보고 있는 사용자" 기준으로 판정해야 한다. 코어의 사용자 권한
+# 계약을 그대로 따른다 (api/routes/plugin_routes.py get_category_plugins_api와 동일):
+#   - 관리자(session['role'] == 'admin')는 전부 허용
+#   - 일반 사용자는 general DB settings의 PERM_CATEGORY_<user_id>_plugin_<plugin_id> 값이
+#     '0'이면 거부, 키가 없거나 그 외 값이면 허용 (관리자 > 사용자 권한 화면의 🧩 항목)
+#   - admin_only = True 인 플러그인은 일반 사용자에게 항상 거부
+#   - 성인/오디오/비디오 세션은 세션 접근 권한(has_*_access)이 있어야 함
+# ---------------------------------------------------------------------------
+
+_SIDEBAR_PATH = "/api/media/category-plugins"
+_perm_cache = {}  # user_id -> (perm_map_or_None, ts)
+
+_SESSION_ACCESS_FLAGS = {
+    "adult": "has_adult_access",
+    "audiobook": "has_audiobook_access",
+    "video": "has_video_access",
+}
+
+
+def _is_sidebar_request():
+    """지금 요청이 코어 사이드바 목록 API(/api/media/category-plugins)인지.
+
+    개별 플러그인 category_tab 숨김은 '사이드바에 그릴 때'만 적용해야 한다. 예전에는
+    요청 경로와 상관없이 숨겼는데, 코어의 관리자 > 사용자 권한 화면(/api/admin/permissions)도
+    category_tab 유무로 🧩 플러그인 항목을 만들기 때문에, 허브에 합친 플러그인은 권한 표에서
+    통째로 사라져 관리자가 일반 사용자에게 허용/거부를 지정할 방법이 없었다
+    (= 1인 사용자 전제였던 부분)."""
+    try:
+        from flask import has_request_context, request
+
+        if not has_request_context():
+            return False
+        return (request.path or "").rstrip("/") == _SIDEBAR_PATH
+    except Exception:
+        return False
+
+
+def _current_viewer():
+    """현재 요청의 로그인 사용자. 요청 컨텍스트 밖(모듈 로드 등)이면 None."""
+    try:
+        from flask import has_request_context, session
+
+        if not has_request_context():
+            return None
+        return {
+            "user_id": session.get("user_id"),
+            "is_admin": session.get("role") == "admin",
+        }
+    except Exception:
+        return None
+
+
+def _user_plugin_perms(user_id, force_refresh=False):
+    """해당 사용자의 플러그인 권한 맵 {PERM_CATEGORY_<uid>_plugin_<id>: '0'|'1'}.
+    조회 실패 시 None (호출부에서 일반 사용자는 '거부'로 취급 = fail-closed)."""
+    now = time.time()
+    cached = _perm_cache.get(user_id)
+    if not force_refresh and cached is not None and (now - cached[1]) < _CONFIG_CACHE_TTL_SEC:
+        return cached[0]
+
+    prefix = f"PERM_CATEGORY_{user_id}_plugin_"
+    result = None
+    try:
+        from services.plugin_db_gateway import PluginDatabaseGateway
+
+        gw = PluginDatabaseGateway("general")
+        rows = gw.fetch_all("SELECT `key`, `value` FROM settings WHERE `key` LIKE ?", (prefix + "%",))
+        result = {}
+        for row in rows or []:
+            try:
+                result[str(row["key"])] = str(row["value"])
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"[PluginHub] 사용자({user_id}) 플러그인 권한 조회 실패: {e!r}", flush=True)
+        result = None
+
+    _perm_cache[user_id] = (result, now)
+    return result
+
+
+def _user_can_use_plugin(viewer, p_id, target_class=None, perms=None):
+    """viewer가 플러그인 p_id를 쓸 수 있는지 (코어 사이드바 판정과 동일 기준)."""
+    if viewer is None:
+        # 요청 컨텍스트 밖의 내부 호출 — 사용자 판정 대상 아님
+        return True
+    if viewer.get("is_admin"):
+        return True
+    user_id = viewer.get("user_id")
+    if not user_id:
+        return False
+    if target_class is not None and getattr(target_class, "admin_only", False):
+        return False
+    if perms is None:
+        perms = _user_plugin_perms(user_id)
+    if perms is None:
+        return False
+    return perms.get(f"PERM_CATEGORY_{user_id}_plugin_{p_id}") != "0"
+
+
+def _viewer_can_see_hub(viewer):
+    """viewer의 사이드바에 플러그인 허브 탭 자체가 실제로 보이는지.
+    허브가 정지됐거나 이 사용자에게 허브 권한이 없으면, 허브에 '합친' 플러그인을
+    개별 탭에서 숨기면 안 된다 — 숨기면 그 사용자는 해당 플러그인에 아예 접근할 길이 없어진다."""
+    if not _is_plugin_enabled(SELF_ID):
+        return False
+    return _user_can_use_plugin(viewer, SELF_ID, PluginHubMetadataProvider)
+
+
+def _session_access_ok(db_type):
+    """성인/오디오/비디오 세션 접근 권한 (코어 api.auth.check_adult_permission과 동일 기준)."""
+    try:
+        from api.auth import check_adult_permission
+
+        return bool(check_adult_permission(db_type))
+    except Exception:
+        pass
+    try:
+        from flask import session
+
+        if session.get("role") == "admin":
+            return True
+        flag = _SESSION_ACCESS_FLAGS.get(db_type)
+        return True if flag is None else session.get(flag) == 1
+    except Exception:
+        return False
+
+
 class _DynamicPluginCategoryTab:
     """개별 플러그인의 category_tab 동적 디스크립터.
 
@@ -229,7 +364,14 @@ class _DynamicPluginCategoryTab:
       - 'merge'  : 허브 탭 안으로 통합 표시. 개별 사이드바 탭은 숨김.
       - 'hide'   : 허브에도 안 넣고, 개별 사이드바 탭도 완전히 숨김.
       - '' (기본): 손대지 않음. 개별 사이드바 탭 그대로 노출.
-    즉 'merge'/'hide' 둘 다 개별 탭은 숨겨야 하므로 판정 자체는 동일하게 처리한다.
+    다중 사용자 규칙(v3.3.0):
+      - 숨김은 코어 사이드바 API(/api/media/category-plugins) 요청에서만 적용한다.
+        그 외(관리자 > 사용자 권한 표, 플러그인 목록 등)에서는 원본을 그대로 돌려줘서
+        관리자가 허브에 합친 플러그인도 사용자별로 허용/거부할 수 있게 한다.
+      - 'merge'는 지금 보는 사용자가 허브를 실제로 볼 수 있을 때만 개별 탭을 숨긴다.
+        허브 권한이 없거나 허브가 정지된 사용자에게는 개별 탭을 그대로 보여준다
+        (개별 탭에 대한 사용자 권한 판정은 코어가 그대로 한다).
+      - 'hide'는 관리자 의도대로 모든 사용자에게 숨긴다.
     """
 
     def __init__(self, plugin_id, orig_tab):
@@ -240,20 +382,20 @@ class _DynamicPluginCategoryTab:
         if not _self_installed():
             return self._orig
         try:
+            if not _is_sidebar_request():
+                return self._orig
             _discover_viewer_classes()
             config = _load_general_config()
             sessions = _tab_sessions(self._orig)
-            req_session = _current_request_session()
-            if req_session:
-                if req_session in sessions and _get_mode(config, self.plugin_id, req_session) in (
-                    _MODE_MERGE,
-                    _MODE_HIDE,
-                ):
-                    return None
-            else:
-                non_normal = _non_normal_sessions_for(config, self.plugin_id, sessions)
-                if non_normal and len(non_normal) == len(sessions):
-                    return None
+            # 코어 사이드바 API는 type 미지정 시 general로 처리한다.
+            req_session = _current_request_session() or "general"
+            if req_session not in sessions:
+                return self._orig
+            mode = _get_mode(config, self.plugin_id, req_session)
+            if mode == _MODE_HIDE:
+                return None
+            if mode == _MODE_MERGE and _viewer_can_see_hub(_current_viewer()):
+                return None
         except Exception:
             pass
         return self._orig
@@ -683,20 +825,60 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         return False, "플러그인 허브는 메타데이터 적용 기능을 제공하지 않습니다."
 
     def get_dashboard_data(self, db_type, limit=10):
-        """현재 세션(db_type)의 허브 탭 목록 반환."""
+        """현재 세션(db_type)의 허브 탭 목록 반환.
+
+        탭 목록은 "지금 요청한 사용자" 기준으로 거른다(v3.3.0):
+          - 관리자: 허브에 합친 플러그인 전부(정지된 것 제외)
+          - 일반 사용자: 그 중 관리자가 사용자 권한 화면에서 허용한 것만
+            (PERM_CATEGORY_<uid>_plugin_<id> != '0', admin_only 아님)
+        설정 화면용 데이터(catalog/orders/excluded_ids)는 관리자에게만 내려준다 —
+        이 엔드포인트는 코어에서 로그인/관리자 데코레이터 없이 열려 있기 때문."""
         _apply_session_overrides(force_refresh_config=True)
         config = _load_general_config()
         session = str(db_type or "general").strip().lower()
 
+        viewer = _current_viewer()
+        # 요청 컨텍스트 밖(내부 호출)은 관리자와 동일하게 취급
+        is_admin = viewer is None or bool(viewer.get("is_admin"))
+
+        # 체크박스 name="HIDE_TITLE_BAR" value="1" — 코어 저장 폼은 체크 해제된 체크박스는
+        # 아예 전송하지 않으므로, config에 키가 없거나 빈 값이면 "숨기지 않음"(기본값)이다.
+        hide_title_bar = str(config.get("HIDE_TITLE_BAR") or "").strip() not in ("", "0", "false", "False")
+
+        result = {
+            "success": True,
+            "viewers": [],
+            "is_admin": is_admin,
+            "notice": "",
+            "hub_version": _read_plugin_version(SELF_ID),
+            "hide_title_bar": hide_title_bar,
+        }
+
+        perms = None
+        if not is_admin:
+            user_id = viewer.get("user_id")
+            if not user_id:
+                result["notice"] = "로그인이 필요합니다."
+                return result
+            if not _session_access_ok(session):
+                result["notice"] = "이 보관함에 대한 접근 권한이 없습니다."
+                return result
+            perms = _user_plugin_perms(user_id, force_refresh=True)
+            if not _user_can_use_plugin(viewer, SELF_ID, PluginHubMetadataProvider, perms):
+                result["notice"] = "플러그인 허브 사용 권한이 없습니다. 관리자에게 문의하세요."
+                return result
+
         discovered = _discover_viewer_classes()
 
-        # 탭 목록: 정지된 플러그인은 제외
+        # 탭 목록: 정지된 플러그인 / 이 사용자에게 허용되지 않은 플러그인은 제외
         tabs = []
-        for p_id, p_name, sessions, _cls, enabled in discovered:
+        for p_id, p_name, sessions, target_class, enabled in discovered:
             if not enabled:
                 continue
             picked = _unified_sessions_for(config, p_id, sessions)
             if session not in picked:
+                continue
+            if not is_admin and not _user_can_use_plugin(viewer, p_id, target_class, perms):
                 continue
             tab = _ORIG_TABS.get(p_id) or {}
             tabs.append(
@@ -708,15 +890,18 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
                     "order": int((tab.get("order") if isinstance(tab, dict) else 50) or 50),
                 }
             )
-        tabs = _sort_by_order(tabs, _session_order(config, session), "title")
+        result["viewers"] = _sort_by_order(tabs, _session_order(config, session), "title")
 
-        # 설정 카탈로그: 정지된 플러그인도 목록에는 계속 노출한다.
+        if not is_admin:
+            return result
+
+        # 설정 카탈로그(관리자 전용): 정지된 플러그인도 목록에는 계속 노출한다.
         # 모드 값은 항상 "실제 저장된 값" 그대로 보여준다(강제 초기화 금지) — save-config API가
         # 전체 config JSON을 통째로 덮어쓰는 방식이라, 여기서 강제로 값을 바꿔 보여주면
         # 사용자가 저장 버튼을 누르는 순간 원래 선택값이 영구 소실된다. 대신 프론트(settings.js)에서
         # enabled=False인 카드는 조작만 막아(값은 유지) 재설정 없이도 다시 켜면 그대로 복원되게 한다.
         catalog = []
-        for p_id, p_name, sessions, _cls, enabled in discovered:
+        for p_id, p_name, sessions, target_class, enabled in discovered:
             modes = {s: (_get_mode(config, p_id, s) or "normal") for s in sessions}
             catalog.append(
                 {
@@ -726,25 +911,15 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
                     "sessions": sessions,
                     "modes": modes,
                     "enabled": enabled,
+                    "admin_only": bool(getattr(target_class, "admin_only", False)),
                 }
             )
         catalog.sort(key=lambda x: x["name"].lower())
 
-        orders = {s: _session_order(config, s) for s in _SESSION_LABELS}
-        excluded_ids_str = str(config.get("EXCLUDED_IDS", _DEFAULT_EXCLUDED_IDS))
-        # 체크박스 name="HIDE_TITLE_BAR" value="1" — 코어 저장 폼은 체크 해제된 체크박스는
-        # 아예 전송하지 않으므로, config에 키가 없거나 빈 값이면 "숨기지 않음"(기본값)이다.
-        hide_title_bar = str(config.get("HIDE_TITLE_BAR") or "").strip() not in ("", "0", "false", "False")
-
-        return {
-            "success": True,
-            "viewers": tabs,
-            "catalog": catalog,
-            "orders": orders,
-            "excluded_ids": excluded_ids_str,
-            "hub_version": _read_plugin_version(SELF_ID),
-            "hide_title_bar": hide_title_bar,
-        }
+        result["catalog"] = catalog
+        result["orders"] = {s: _session_order(config, s) for s in _SESSION_LABELS}
+        result["excluded_ids"] = str(config.get("EXCLUDED_IDS", _DEFAULT_EXCLUDED_IDS))
+        return result
 
 
 # 검증기 통과용 리터럴 선언을 런타임 동적 디스크립터로 교체

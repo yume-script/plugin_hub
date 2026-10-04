@@ -47,6 +47,9 @@
 
   let plugins = [];
   let activeId = null;
+  // 서버가 내려주는 현재 사용자 정보(v3.3.0). 일반 사용자는 관리자가 허용한 플러그인만 받는다.
+  let isAdmin = true;
+  let accessNotice = '';
   const bundleCache = new Map();
 
   // 사이드바 "환경설정" → 플러그인 탭 전환 → 이 플러그인 카드 아코디언 펼치기까지
@@ -160,6 +163,9 @@
       viewers: Array.isArray(data.viewers) ? data.viewers : [],
       hubVersion: typeof data.hub_version === 'string' ? data.hub_version : '',
       hideTitleBar: !!data.hide_title_bar,
+      // 구버전 서버 응답(is_admin 없음)은 관리자 기준으로 취급
+      isAdmin: data.is_admin !== false,
+      notice: typeof data.notice === 'string' ? data.notice : '',
     };
   }
 
@@ -324,7 +330,15 @@
     tabsEl.appendChild(frag);
 
     if (plugins.length === 0) {
-      showStatus('이 보관함의 플러그인 허브에 표시할 플러그인이 없습니다. 설정 > 플러그인 > 플러그인 허브에서 선택하세요.', true);
+      let msg;
+      if (accessNotice) {
+        msg = accessNotice;
+      } else if (isAdmin) {
+        msg = '이 보관함의 플러그인 허브에 표시할 플러그인이 없습니다. 설정 > 플러그인 > 플러그인 허브에서 선택하세요.';
+      } else {
+        msg = '이 보관함에서 사용할 수 있는 플러그인이 없습니다. 관리자에게 플러그인 사용 권한을 요청하세요.';
+      }
+      showStatus(msg, true);
       panesEl.innerHTML = '';
       activeId = null;
     } else {
@@ -380,10 +394,18 @@
     } catch (_) {}
   }
 
+  function applyViewerResult(result) {
+    isAdmin = result.isAdmin;
+    accessNotice = result.notice;
+    // 설정 바로가기는 관리자 전용 화면이므로 일반 사용자에게는 노출하지 않는다.
+    if (settingsBtn && !isAdmin) settingsBtn.remove();
+    plugins = result.viewers;
+  }
+
   async function reloadViewerTabs() {
     try {
       const result = await fetchViewers();
-      plugins = result.viewers;
+      applyViewerResult(result);
       renderTabs();
       cleanUpSidebarTabs(plugins);
       updateHeaderVersion(result.hubVersion);
@@ -407,12 +429,13 @@
   async function init() {
     try {
       const result = await fetchViewers();
-      plugins = result.viewers;
+      applyViewerResult(result);
       renderTabs();
       cleanUpSidebarTabs(plugins);
       updateHeaderVersion(result.hubVersion);
       applyTitleBarVisibility(result.hideTitleBar);
-      checkForUpdate(result.hubVersion);
+      // GitHub 업데이트 안내는 업데이트 권한이 있는 관리자에게만 의미가 있다.
+      if (isAdmin) checkForUpdate(result.hubVersion);
     } catch (err) {
       console.error('[PluginHub] init error:', err);
       showStatus('뷰어 목록을 불러오지 못했습니다: ' + (err.message || '오류'), true);
