@@ -9,7 +9,25 @@
 (function () {
   'use strict';
 
-  const SESSION_LABELS = { general: '일반', adult: '성인', audiobook: '오디오', video: '비디오' };
+  // 화면 언어: BookOasis에서 고른 언어(window.i18n.currentLang, 없으면 저장된 bookoasis_lang)가 영어면 영어 문구.
+  // T(한국어, 영어) - 두 문구를 나란히 적어 둔다 (BookOasis 코어 번역 파일에는 플러그인 문구를 넣을 수 없어서)
+  const PH_LANG = (() => {
+    try {
+      const l = (window.i18n && window.i18n.currentLang) || localStorage.getItem('bookoasis_lang') || 'ko';
+      return String(l).toLowerCase().startsWith('en') ? 'en' : 'ko';
+    } catch (e) { return 'ko'; }
+  })();
+  function T(ko, en) { return PH_LANG === 'en' ? en : ko; }
+  // HTML의 고정 문구: data-en(글자) / data-en-html(이 플러그인 파일에 적힌 정적 HTML) / data-en-title / data-en-placeholder
+  (function applyStaticLang(scope) {
+    if (PH_LANG !== 'en' || !scope) return;
+    scope.querySelectorAll('[data-en]').forEach((el) => { el.textContent = el.getAttribute('data-en'); });
+    scope.querySelectorAll('[data-en-html]').forEach((el) => { el.innerHTML = el.getAttribute('data-en-html'); });
+    scope.querySelectorAll('[data-en-title]').forEach((el) => { el.title = el.getAttribute('data-en-title'); });
+    scope.querySelectorAll('[data-en-placeholder]').forEach((el) => { el.placeholder = el.getAttribute('data-en-placeholder'); });
+  })((typeof root !== 'undefined' ? root : null));
+
+  const SESSION_LABELS = { general: T('일반', 'General'), adult: T('성인', 'Adult'), audiobook: T('오디오', 'Audio'), video: T('비디오', 'Video') };
   const SESSIONS = Object.keys(SESSION_LABELS);
   const MODE_MERGE = 'merge';
   const MODE_HIDE = 'hide';
@@ -114,7 +132,7 @@
     chip.className = 'pv-chip';
     chip.setAttribute('data-pv-id', pluginId);
     chip.setAttribute('draggable', 'true');
-    chip.innerHTML = `<span class="pv-chip-name">${esc(p.name)}</span><button type="button" class="pv-chip-x" title="기본으로">&times;</button>`;
+    chip.innerHTML = T(`<span class="pv-chip-name">${esc(p.name)}</span><button type="button" class="pv-chip-x" title="기본으로">&times;</button>`, `<span class="pv-chip-name">${esc(p.name)}</span><button type="button" class="pv-chip-x" title="Back to default">&times;</button>`);
 
     chip.querySelector('.pv-chip-x').addEventListener('click', (e) => {
       e.preventDefault();
@@ -179,7 +197,7 @@
     SESSIONS.forEach((s) => {
       const lane = document.createElement('div');
       lane.className = 'pv-lane';
-      lane.innerHTML = `<div class="pv-lane-title">${esc(SESSION_LABELS[s])}</div><div class="pv-lane-body pv-lane-empty" data-pv-lane="${esc(s)}"></div>`;
+      lane.innerHTML = `<div class="pv-lane-title">${esc(SESSION_LABELS[s])}</div><div class="pv-lane-body pv-lane-empty" data-pv-lane="${esc(s)}" data-empty="${esc(T('표시된 플러그인 없음', 'No plugins shown'))}"></div>`;
       const body = lane.querySelector('.pv-lane-body');
       // 레인 빈 공간으로 드래그: 지원 세션이면 맨 뒤에 추가(레인 이동 포함)
       body.addEventListener('dragover', (e) => {
@@ -222,7 +240,7 @@
 
   function renderCards(catalog) {
     if (!catalog.length) {
-      grid.innerHTML = '<div class="pv-settings-empty">표시할 카테고리 뷰 플러그인이 설치되어 있지 않습니다.</div>';
+      grid.innerHTML = T('<div class="pv-settings-empty">표시할 카테고리 뷰 플러그인이 설치되어 있지 않습니다.</div>', '<div class="pv-settings-empty">No category view plugins are installed.</div>');
       return;
     }
 
@@ -240,9 +258,9 @@
       return `
         <td class="pv-cell${isEnabled ? '' : ' pv-cell-locked'}">
           <select name="${esc(key)}" data-pv-plugin="${esc(p.id)}" data-pv-session="${esc(s)}" data-pv-locked="${isEnabled ? '0' : '1'}" tabindex="${isEnabled ? '0' : '-1'}">
-            ${optHtml(cur, '', '기본')}
-            ${optHtml(cur, MODE_MERGE, '허브에 합치기')}
-            ${optHtml(cur, MODE_HIDE, '완전히 숨기기')}
+            ${optHtml(cur, '', T('기본', 'Default'))}
+            ${optHtml(cur, MODE_MERGE, T('허브에 합치기', 'Merge into hub'))}
+            ${optHtml(cur, MODE_HIDE, T('완전히 숨기기', 'Hide completely'))}
           </select>
         </td>`;
     }
@@ -256,17 +274,21 @@
         <tr class="pv-row${isEnabled ? '' : ' pv-row-disabled'}">
           <th scope="row" class="pv-row-name">
             <div class="pv-row-title">${esc(p.name)}</div>
-            <div class="pv-row-meta">${esc(p.id)}${version ? ` · ${version}` : ''}${isEnabled ? '' : ' · <span class="pv-row-badge">정지됨</span>'}${p.admin_only ? ' · <span class="pv-row-badge-info" title="admin_only 플러그인 — 허브에 합쳐도 일반 사용자에게는 보이지 않습니다">관리자 전용</span>' : ''}</div>
+            <div class="pv-row-meta">${esc(p.id)}${version ? ` · ${version}` : ''}${isEnabled ? '' : ' · <span class="pv-row-badge">' + T('정지됨', 'Stopped') + '</span>'}${p.admin_only ? ' · <span class="pv-row-badge-info" title="' + T('admin_only 플러그인 — 허브에 합쳐도 일반 사용자에게는 보이지 않습니다', 'admin_only plugin: regular users will not see it even when merged into the hub') + '">' + T('관리자 전용', 'Admin only') + '</span>' : ''}</div>
           </th>
           ${sessionCells}
         </tr>`;
     }).join('');
 
-    grid.innerHTML = `
+    grid.innerHTML = T(`
       <table class="pv-table">
         <thead><tr><th class="pv-col-name">플러그인</th>${headCells}</tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table>`, `
+      <table class="pv-table">
+        <thead><tr><th class="pv-col-name">Plugin</th>${headCells}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`);
 
     grid.querySelectorAll('select[data-pv-plugin]').forEach((sel) => {
       // 잠긴(정지된 플러그인) select는 상호작용 자체를 막아 값이 항상 유지되게 한다.
@@ -303,14 +325,14 @@
 
   if (selectAllBtn) {
     selectAllBtn.addEventListener('click', () => {
-      if (window.confirm('현재 목록에 보이는 모든(잠기지 않고, "완전히 숨기기"가 아닌) 플러그인을 전부 "허브에 합치기"로 바꿉니다. 계속할까요?')) {
+      if (window.confirm(T('현재 목록에 보이는 모든(잠기지 않고, "완전히 숨기기"가 아닌) 플러그인을 전부 "허브에 합치기"로 바꿉니다. 계속할까요?', 'Set every plugin shown in the list (not locked and not "Hide completely") to "Merge into hub"? Continue?'))) {
         bulkSetMode(MODE_MERGE);
       }
     });
   }
   if (deselectAllBtn) {
     deselectAllBtn.addEventListener('click', () => {
-      if (window.confirm('현재 "허브에 합치기"로 되어 있는 항목들을 전부 "기본"으로 되돌립니다. 저장을 누르면 반영됩니다. 계속할까요?')) {
+      if (window.confirm(T('현재 "허브에 합치기"로 되어 있는 항목들을 전부 "기본"으로 되돌립니다. 저장을 누르면 반영됩니다. 계속할까요?', 'Set every item now on "Merge into hub" back to "Default"? It applies when you press Save. Continue?'))) {
         bulkSetMode(MODE_NORMAL);
       }
     });
@@ -356,7 +378,7 @@
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || '조회 실패');
+      if (!data.success) throw new Error(data.error || T('조회 실패', 'Load failed'));
       const catalog = Array.isArray(data.catalog) ? data.catalog : [];
       catalogById = {};
       catalog.forEach((p) => { catalogById[p.id] = p; });
@@ -371,7 +393,7 @@
       }
     } catch (err) {
       console.error('[PluginHub-Settings] load error:', err);
-      grid.innerHTML = `<div class="pv-settings-error">플러그인 목록을 불러오지 못했습니다: ${esc(err.message || '오류')}</div>`;
+      grid.innerHTML = T(`<div class="pv-settings-error">플러그인 목록을 불러오지 못했습니다: ${esc(err.message || '오류')}</div>`, `<div class="pv-settings-error">Could not load the plugin list: ${esc(err.message || 'error')}</div>`);
     }
   }
 

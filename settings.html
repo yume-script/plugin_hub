@@ -1,5 +1,5 @@
 <div class="pv-settings">
-  <p class="pv-settings-desc">
+  <p class="pv-settings-desc" data-en-html="See every installed plugin in the table below and change how it is shown right in each cell (plugin × session): &lt;strong&gt;Default&lt;/strong&gt; (its own sidebar tab as is), &lt;strong&gt;Merge into hub&lt;/strong&gt; (shown inside this tab, its own tab hidden), &lt;strong&gt;Hide completely&lt;/strong&gt; (not in the hub and its own tab hidden). Choosing &quot;Merge into hub&quot; adds a chip to the per-session lane below; drag chips to change the tab order or move them to another session. Stopped plugins stay in the table with their choice kept — only the choice is locked, and it comes back when the plugin is enabled again. While stopped they do not appear as tabs.">
     아래 표에서 설치된 플러그인 전체를 한눈에 보고, 각 셀(플러그인 × 세션)에서 바로 표시 방식을 바꿀 수 있습니다:
     <strong>기본</strong>(개별 사이드바 탭 그대로), <strong>허브에 합치기</strong>(이 탭 안으로 통합, 개별 탭은 숨김),
     <strong>완전히 숨기기</strong>(허브에도 안 넣고 개별 탭도 숨김). "허브에 합치기"로 선택하면 아래 세션별 레인에
@@ -7,42 +7,42 @@
     정지된 플러그인은 표에 계속 표시되며 선택 값은 그대로 보존됩니다 — 선택만 잠겨서(변경 불가)
     다시 활성화하면 예전 선택이 자동으로 복원됩니다. 정지 중에는 탭에도 나타나지 않습니다.
   </p>
-  <p class="pv-settings-desc pv-user-note">
+  <p class="pv-settings-desc pv-user-note" data-en-html="&lt;strong&gt;Regular users&lt;/strong&gt;: the display mode set here applies to everyone, but a regular user's hub shows only the plugins allowed in the 🧩 items of &lt;strong&gt;Admin &gt; User permissions&lt;/strong&gt;. Users who are not allowed the hub itself (🧩 Plugin Hub) see merged plugins as their own tabs. Plugins marked &quot;Admin only&quot; are not shown to regular users.">
     <strong>일반 사용자</strong>: 여기서 정한 표시 방식은 모든 사용자에게 공통으로 적용되지만, 일반 사용자의 허브에는
     <strong>관리자 &gt; 사용자 권한</strong> 화면의 🧩 항목에서 허용된 플러그인만 탭으로 나타납니다.
     허브 자체(🧩 플러그인 허브)가 허용되지 않은 사용자에게는 "허브에 합치기"한 플러그인이 원래 개별 탭으로 보입니다.
     "관리자 전용" 표시가 붙은 플러그인은 일반 사용자에게 보이지 않습니다.
   </p>
   <div class="pv-bulk-toolbar">
-    <button type="button" class="pv-bulk-btn" data-pv-role="select-all">일괄 합치기</button>
-    <button type="button" class="pv-bulk-btn" data-pv-role="deselect-all">일괄 기본으로</button>
-    <span class="pv-bulk-note">정지된 플러그인은 잠겨있어 일괄 처리에서 제외되며, "완전히 숨기기"는 일괄 처리 대상이 아닙니다.</span>
+    <button type="button" class="pv-bulk-btn" data-pv-role="select-all" data-en="Merge all">일괄 합치기</button>
+    <button type="button" class="pv-bulk-btn" data-pv-role="deselect-all" data-en="All to default">일괄 기본으로</button>
+    <span class="pv-bulk-note" data-en="Stopped plugins are locked and skipped by the bulk actions, and &quot;Hide completely&quot; is not changed by them.">정지된 플러그인은 잠겨있어 일괄 처리에서 제외되며, "완전히 숨기기"는 일괄 처리 대상이 아닙니다.</span>
   </div>
   <div class="pv-table-wrap">
     <div class="pv-grid" data-pv-role="grid">
-      <div class="pv-settings-empty">플러그인 목록을 불러오는 중...</div>
+      <div class="pv-settings-empty" data-en="Loading the plugin list...">플러그인 목록을 불러오는 중...</div>
     </div>
   </div>
   <div class="pv-lanes-wrap">
-    <h4 class="pv-lanes-heading">세션별 탭 순서</h4>
+    <h4 class="pv-lanes-heading" data-en="Tab order per session">세션별 탭 순서</h4>
     <div class="pv-lanes" data-pv-role="lanes"></div>
   </div>
   <div class="pv-excluded-wrap">
-    <h4 class="pv-lanes-heading">화면 표시</h4>
+    <h4 class="pv-lanes-heading" data-en="Display">화면 표시</h4>
     <label class="pv-checkbox-row">
       <input type="checkbox" name="HIDE_TITLE_BAR" value="1" data-pv-role="hide-title-bar-input">
-      <span>제목 표시줄(아이콘 · "플러그인 허브" · 버전 배지) 상시 숨기기</span>
+      <span data-en="Always hide the title bar (icon · &quot;Plugin Hub&quot; · version badge)">제목 표시줄(아이콘 · "플러그인 허브" · 버전 배지) 상시 숨기기</span>
     </label>
-    <p class="pv-settings-desc pv-excluded-desc">
+    <p class="pv-settings-desc pv-excluded-desc" data-en="When on, the title row at the top of the hub is always hidden and only the tab row stays pinned at the top. Applies when you reopen the hub after saving.">
       켜면 허브 화면 맨 위의 제목 줄이 항상 숨겨지고, 탭 목록 줄만 상단에 고정되어 보입니다. 설정 저장 후 허브 화면을 다시 열면 적용됩니다.
     </p>
   </div>
   <div class="pv-excluded-wrap">
-    <h4 class="pv-lanes-heading">목록에서 제외할 플러그인</h4>
-    <p class="pv-settings-desc pv-excluded-desc">
+    <h4 class="pv-lanes-heading" data-en="Plugins to leave out">목록에서 제외할 플러그인</h4>
+    <p class="pv-settings-desc pv-excluded-desc" data-en-html="Plugin IDs separated by commas. Plugins listed here never appear in the hub's cards or tab candidates. The default is &lt;code&gt;bookoasis_plugins_viewer&lt;/code&gt; (plugin viewer) — so another combined viewer does not end up inside the hub.">
       쉼표(,)로 구분한 플러그인 고유 ID. 여기 적힌 플러그인은 허브의 카드 목록/탭 후보에 아예 나타나지 않습니다.
       기본값은 <code>bookoasis_plugins_viewer</code>(플러그인 모아보기) — 허브 안에 또 다른 통합 뷰어가 들어가는 걸 막기 위함입니다.
     </p>
-    <input type="text" class="pv-excluded-input" name="EXCLUDED_IDS" data-pv-role="excluded-input" placeholder="예: bookoasis_plugins_viewer, some_other_plugin_id">
+    <input type="text" class="pv-excluded-input" name="EXCLUDED_IDS" data-pv-role="excluded-input" placeholder="예: bookoasis_plugins_viewer, some_other_plugin_id" data-en-placeholder="e.g. bookoasis_plugins_viewer, some_other_plugin_id">
   </div>
 </div>
