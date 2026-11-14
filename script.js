@@ -1,6 +1,24 @@
 (function () {
   'use strict';
 
+  // 화면 언어: BookOasis에서 고른 언어(window.i18n.currentLang, 없으면 저장된 bookoasis_lang)가 영어면 영어 문구.
+  // T(한국어, 영어) - 두 문구를 나란히 적어 둔다 (BookOasis 코어 번역 파일에는 플러그인 문구를 넣을 수 없어서)
+  const PH_LANG = (() => {
+    try {
+      const l = (window.i18n && window.i18n.currentLang) || localStorage.getItem('bookoasis_lang') || 'ko';
+      return String(l).toLowerCase().startsWith('en') ? 'en' : 'ko';
+    } catch (e) { return 'ko'; }
+  })();
+  function T(ko, en) { return PH_LANG === 'en' ? en : ko; }
+  // HTML의 고정 문구: data-en(글자) / data-en-html(이 플러그인 파일에 적힌 정적 HTML) / data-en-title / data-en-placeholder
+  (function applyStaticLang(scope) {
+    if (PH_LANG !== 'en' || !scope) return;
+    scope.querySelectorAll('[data-en]').forEach((el) => { el.textContent = el.getAttribute('data-en'); });
+    scope.querySelectorAll('[data-en-html]').forEach((el) => { el.innerHTML = el.getAttribute('data-en-html'); });
+    scope.querySelectorAll('[data-en-title]').forEach((el) => { el.title = el.getAttribute('data-en-title'); });
+    scope.querySelectorAll('[data-en-placeholder]').forEach((el) => { el.placeholder = el.getAttribute('data-en-placeholder'); });
+  })(document.querySelector('[data-uf-root]'));
+
   const SELF_ID = 'plugin_hub';
   const root = document.querySelector('[data-uf-root]');
   if (!root) return;
@@ -156,9 +174,9 @@
       `/api/media/dashboard/widgets/${SELF_ID}/data?type=${encodeURIComponent(currentType())}`,
       { credentials: 'same-origin' }
     );
-    if (!res.ok) throw new Error(`통합 뷰어 목록 조회 실패 (HTTP ${res.status})`);
+    if (!res.ok) throw new Error(T(`통합 뷰어 목록 조회 실패 (HTTP ${res.status})`, `Could not load the viewer list (HTTP ${res.status})`));
     const data = await res.json();
-    if (!data.success) throw new Error(data.error || '통합 뷰어 목록 조회 실패');
+    if (!data.success) throw new Error(data.error || T('통합 뷰어 목록 조회 실패', 'Could not load the viewer list'));
     return {
       viewers: Array.isArray(data.viewers) ? data.viewers : [],
       hubVersion: typeof data.hub_version === 'string' ? data.hub_version : '',
@@ -192,10 +210,10 @@
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.href = GITHUB_REPO_URL;
-      link.title = 'GitHub에서 새 버전을 확인하고, 환경설정 > 플러그인 설정에서 업데이트하세요: ' + GITHUB_REPO_URL;
+      link.title = T('GitHub에서 새 버전을 확인하고, 환경설정 > 플러그인 설정에서 업데이트하세요: ', 'Check the new version on GitHub and update it in Settings > Plugin settings: ') + GITHUB_REPO_URL;
       versionEl.insertAdjacentElement('afterend', link);
     }
-    link.textContent = `⬆ v${latestVersion} 업데이트 가능`;
+    link.textContent = T(`⬆ v${latestVersion} 업데이트 가능`, `⬆ v${latestVersion} update available`);
   }
 
   function readUpdateCheckCache() {
@@ -253,9 +271,9 @@
     const res = await fetch(`/api/media/plugins/${encodeURIComponent(pluginId)}/ui`, {
       credentials: 'same-origin',
     });
-    if (!res.ok) throw new Error(`UI 번들 조회 실패 (HTTP ${res.status})`);
+    if (!res.ok) throw new Error(T(`UI 번들 조회 실패 (HTTP ${res.status})`, `Could not load the UI bundle (HTTP ${res.status})`));
     const data = await res.json();
-    if (!data.success || !data.bundle) throw new Error(data.error || 'UI 번들이 없습니다.');
+    if (!data.success || !data.bundle) throw new Error(data.error || T('UI 번들이 없습니다.', 'No UI bundle.'));
     bundleCache.set(pluginId, data.bundle);
     return data.bundle;
   }
@@ -264,7 +282,7 @@
   // 개별 뷰어 스크립트는 window.__bookOasisViewerCleanups 레지스트리로
   // 실행 시 이전 뷰어를 스스로 정리하므로 탭 전환 시 innerHTML 교체가 안전함.
   async function mountViewer(plugin) {
-    showStatus((plugin.title || plugin.id) + ' 뷰어를 불러오는 중...');
+    showStatus((plugin.title || plugin.id) + T(' 뷰어를 불러오는 중...', ' viewer loading...'));
     const bundle = await getBundle(plugin.id);
 
     // 이전 뷰어 정리 (뷰어 자체 레지스트리 선(先)정리)
@@ -291,7 +309,7 @@
         scriptFn(plugin.id, panesEl);
       } catch (err) {
         console.error(`[PluginHub] ${plugin.id} 스크립트 실행 오류:`, err);
-        showStatus((plugin.title || plugin.id) + ' 스크립트 오류: ' + (err.message || '오류'), true);
+        showStatus((plugin.title || plugin.id) + T(' 스크립트 오류: ', ' script error: ') + (err.message || T('오류', 'error')), true);
         return;
       }
     }
@@ -310,7 +328,7 @@
       await mountViewer(plugin);
     } catch (err) {
       console.error('[PluginHub] mount error:', err);
-      showStatus((plugin.title || pluginId) + ' 뷰어를 불러오지 못했습니다: ' + (err.message || '오류'), true);
+      showStatus((plugin.title || pluginId) + T(' 뷰어를 불러오지 못했습니다: ', ' viewer could not be loaded: ') + (err.message || T('오류', 'error')), true);
     }
   }
 
@@ -334,9 +352,9 @@
       if (accessNotice) {
         msg = accessNotice;
       } else if (isAdmin) {
-        msg = '이 보관함의 플러그인 허브에 표시할 플러그인이 없습니다. 설정 > 플러그인 > 플러그인 허브에서 선택하세요.';
+        msg = T('이 보관함의 플러그인 허브에 표시할 플러그인이 없습니다. 설정 > 플러그인 > 플러그인 허브에서 선택하세요.', 'No plugins are set to show in the plugin hub for this library. Choose them in Settings > Plugins > Plugin Hub.');
       } else {
-        msg = '이 보관함에서 사용할 수 있는 플러그인이 없습니다. 관리자에게 플러그인 사용 권한을 요청하세요.';
+        msg = T('이 보관함에서 사용할 수 있는 플러그인이 없습니다. 관리자에게 플러그인 사용 권한을 요청하세요.', 'No plugins are available to you in this library. Ask an administrator for plugin permissions.');
       }
       showStatus(msg, true);
       panesEl.innerHTML = '';
@@ -438,7 +456,7 @@
       if (isAdmin) checkForUpdate(result.hubVersion);
     } catch (err) {
       console.error('[PluginHub] init error:', err);
-      showStatus('뷰어 목록을 불러오지 못했습니다: ' + (err.message || '오류'), true);
+      showStatus(T('뷰어 목록을 불러오지 못했습니다: ', 'Could not load the viewer list: ') + (err.message || T('오류', 'error')), true);
     }
   }
 

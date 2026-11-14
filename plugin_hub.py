@@ -19,9 +19,42 @@
 """
 
 import json
+import re
+import threading
 import time
 
 from plugins.metadata.base import BaseMetadataProvider
+
+# ------------------------------------------------------------------
+# 화면 언어 (BookOasis에서 고른 언어 - bookoasis_lang 쿠키). 영어면 영어 문구, 아니면 한국어.
+# _T(한국어, 영어) - 두 문구를 나란히 적는다. 요청 밖에서는 마지막 요청의 언어를 쓴다.
+# ------------------------------------------------------------------
+_LANG_LAST = ["ko"]
+
+
+def _req_lang():
+    try:
+        from flask import has_request_context, request
+        if has_request_context():
+            raw = (request.cookies.get("bookoasis_lang") or "").strip().lower()
+            _LANG_LAST[0] = "en" if raw.startswith("en") else "ko"
+    except Exception:
+        pass
+    return _LANG_LAST[0]
+
+
+def _T(ko, en):
+    return en if _req_lang() == "en" else ko
+
+
+class _LazyText(dict):
+    """값이 (한국어, 영어)인 표 - 꺼낼 때 그 요청의 언어로 (모듈을 불러올 때 언어가 정해지지 않게)"""
+
+    def __getitem__(self, key):
+        return _T(*dict.__getitem__(self, key))
+
+    def get(self, key, default=None):
+        return self[key] if key in self else default
 
 SELF_ID = "plugin_hub"
 
@@ -41,14 +74,20 @@ _enabled_cache = {}  # p_id -> (bool, ts)
 _COMPLIANCE_CACHE_TTL_SEC = 60.0
 _compliance_cache = {}  # p_id -> (violation_reason_or_None, ts)
 _compliance_warned = set()  # 이미 한 번 로그를 남긴 p_id (프로세스 생애주기 동안 스팸 방지)
-_compliance_cleaned = set()  # 이미 저장 설정을 기본값으로 되돌린 p_id (프로세스 생애주기 동안 1회만)
+_compliance_cleaned = set()
+# 관리자 알림 문제 카드(BookOasis 2.8.4+ report_problem)용 - 가이드 위반으로 허브에서 빠진 플러그인
+_violation_lock = threading.Lock()
+_violations = {}          # p_id -> 사유
+_compliant_seen = set()   # 이번 실행에서 규칙을 지키는 것으로 확인한 p_id (문제 카드 닫기용)
+_problem_sync = {"at": 0.0}
+_PROBLEM_SYNC_SEC = 60.0  # 이미 저장 설정을 기본값으로 되돌린 p_id (프로세스 생애주기 동안 1회만)
 
-_SESSION_LABELS = {
-    "general": "일반",
-    "adult": "성인",
-    "audiobook": "오디오",
-    "video": "비디오",
-}
+_SESSION_LABELS = _LazyText({
+    "general": ("일반", "General"),
+    "adult": ("성인", "Adult"),
+    "audiobook": ("오디오", "Audio"),
+    "video": ("비디오", "Video"),
+})
 
 # 런타임 category_tab 오버라이드 원본 보관: {plugin_id: 원본 category_tab dict}
 _ORIG_TABS = {}
@@ -526,31 +565,31 @@ def _check_guide_compliance_uncached(target_class, p_id):
         module = sys.modules.get(getattr(target_class, "__module__", None))
         module_file = getattr(module, "__file__", None) if module else None
         if not module_file:
-            return "플러그인 모듈 파일 경로를 확인할 수 없음"
+            return _T("플러그인 모듈 파일 경로를 확인할 수 없음", "Cannot determine the plugin module file path")
 
         plugin_dir = os.path.dirname(os.path.abspath(module_file))
         folder_name = os.path.basename(plugin_dir)
 
         if folder_name != p_id:
-            return f"클래스 id('{p_id}')가 폴더명('{folder_name}')과 다름 (가이드 2장 디렉토리 구조 규격 위반)"
+            return _T(f"클래스 id('{p_id}')가 폴더명('{folder_name}')과 다름 (가이드 2장 디렉토리 구조 규격 위반)", f"class id ('{p_id}') differs from the folder name ('{folder_name}') (violates guide ch.2 directory structure)")
 
         version_path = os.path.join(plugin_dir, "VERSION")
         if not os.path.isfile(version_path):
-            return "VERSION 파일이 없음 (가이드 2장 디렉토리 구조 규격상 필수)"
+            return _T("VERSION 파일이 없음 (가이드 2장 디렉토리 구조 규격상 필수)", "VERSION file missing (required by guide ch.2 directory structure)")
 
         try:
             with open(version_path, "r", encoding="utf-8") as f:
                 raw = f.read().strip()
             data = json.loads(raw)
         except Exception:
-            return "VERSION 파일이 유효한 JSON이 아님"
+            return _T("VERSION 파일이 유효한 JSON이 아님", "VERSION file is not valid JSON")
 
         if not isinstance(data, dict) or not str(data.get("plugin version") or "").strip():
-            return "VERSION 파일에 'plugin version' 키가 없거나 비어있음"
+            return _T("VERSION 파일에 'plugin version' 키가 없거나 비어있음", "VERSION file has no 'plugin version' key or it is empty")
 
         return None
     except Exception as e:
-        return f"가이드 준수 여부 검사 중 오류: {e!r}"
+        return _T(f"가이드 준수 여부 검사 중 오류: {e!r}", f"error while checking guide compliance: {e!r}")
 
 
 def _check_guide_compliance(target_class, p_id):
@@ -561,6 +600,12 @@ def _check_guide_compliance(target_class, p_id):
         return cached[0]
     reason = _check_guide_compliance_uncached(target_class, p_id)
     _compliance_cache[p_id] = (reason, now)
+    with _violation_lock:
+        if reason:
+            _violations[p_id] = reason
+        else:
+            _violations.pop(p_id, None)
+            _compliant_seen.add(p_id)
     if reason and p_id not in _compliance_warned:
         _compliance_warned.add(p_id)
         print(f"[PluginHub] '{p_id}' 플러그인은 허브 대상에서 제외됨 (가이드 위반: {reason})", flush=True)
@@ -761,13 +806,13 @@ class _DynamicConfigSchema:
                         "required": False,
                         "default": "",
                         "options": [
-                            {"value": "", "label": "기본(개별 탭 그대로)"},
-                            {"value": _MODE_MERGE, "label": "허브에 합치기"},
-                            {"value": _MODE_HIDE, "label": "완전히 숨기기"},
+                            {"value": "", "label": _T("기본(개별 탭 그대로)", "Default (keep its own tab)")},
+                            {"value": _MODE_MERGE, "label": _T("허브에 합치기", "Merge into hub")},
+                            {"value": _MODE_HIDE, "label": _T("완전히 숨기기", "Hide completely")},
                         ],
                         "description": (
-                            f"{label_session} 보관함에서 {p_name}({p_id})를 어떻게 표시할지 선택합니다. "
-                            "'허브에 합치기'와 '완전히 숨기기' 둘 다 개별 사이드바 탭은 숨겨집니다."
+                            _T(f"{label_session} 보관함에서 {p_name}({p_id})를 어떻게 표시할지 선택합니다. "
+                            "'허브에 합치기'와 '완전히 숨기기' 둘 다 개별 사이드바 탭은 숨겨집니다.", f"Choose how {p_name} ({p_id}) is shown in the {label_session} library. " "Both 'Merge into hub' and 'Hide completely' hide its own sidebar tab.")
                         ),
                     }
                 )
@@ -775,11 +820,11 @@ class _DynamicConfigSchema:
             schema.append(
                 {
                     "key": "_NO_VIEWERS",
-                    "label": "표시할 카테고리 뷰 플러그인 없음",
+                    "label": _T("표시할 카테고리 뷰 플러그인 없음", "No category view plugins to show"),
                     "type": "text",
                     "required": False,
                     "default": "",
-                    "description": "카테고리 뷰 플러그인이 설치되면 여기에 표시 여부 옵션이 나타납니다.",
+                    "description": _T("카테고리 뷰 플러그인이 설치되면 여기에 표시 여부 옵션이 나타납니다.", "Options appear here once category view plugins are installed."),
                 }
             )
         return schema
@@ -822,7 +867,41 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         return []
 
     def apply(self, db_type, book_id, item_data):
-        return False, "플러그인 허브는 메타데이터 적용 기능을 제공하지 않습니다."
+        return False, _T("플러그인 허브는 메타데이터 적용 기능을 제공하지 않습니다.", "The plugin hub does not apply metadata.")
+
+    def _sync_problem_cards(self):
+        """가이드 규칙(클래스 id = 폴더명, VERSION 파일)을 어겨 허브에서 빠진 플러그인을 관리자 알림 문제 카드로 올리고,
+        다시 지키면 닫는다. report_problem이 없는 구버전 코어(2.8.4 미만)에서는 아무것도 하지 않는다. 1분에 한 번만."""
+        if not hasattr(self, "report_problem") or not hasattr(self, "resolve_problem"):
+            return
+        now = time.time()
+        if now - _problem_sync["at"] < _PROBLEM_SYNC_SEC:
+            return
+        _problem_sync["at"] = now
+        with _violation_lock:
+            bad = dict(_violations)
+            good = set(_compliant_seen)
+
+        def code_of(p_id):
+            return ("excluded_" + re.sub(r"[^A-Za-z0-9_.-]", "_", str(p_id)))[:64]
+
+        for p_id, reason in bad.items():
+            try:
+                self.report_problem(
+                    code_of(p_id), severity="action_required",
+                    title=_T("'%s' 플러그인이 허브에서 빠졌습니다" % p_id, "The '%s' plugin was left out of the hub" % p_id),
+                    detail=_T("플러그인 가이드 규칙을 어겨 허브 탭·설정에서 제외하고 원래 사이드바 탭으로 둡니다: %s. "
+                              "플러그인을 고치거나 다시 설치하면 다음 확인 때 저절로 닫힙니다." % reason,
+                              "It breaks a plugin guide rule, so it is left out of the hub tabs and settings and keeps its "
+                              "own sidebar tab: %s. Fix or reinstall the plugin and this closes by itself at the next check." % reason),
+                    db_type="general", message=str(reason))
+            except Exception:
+                pass
+        for p_id in good:
+            try:
+                self.resolve_problem(code_of(p_id), db_type="general")
+            except Exception:
+                pass
 
     def get_dashboard_data(self, db_type, limit=10):
         """현재 세션(db_type)의 허브 탭 목록 반환.
@@ -858,17 +937,22 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         if not is_admin:
             user_id = viewer.get("user_id")
             if not user_id:
-                result["notice"] = "로그인이 필요합니다."
+                result["notice"] = _T("로그인이 필요합니다.", "Login required.")
                 return result
             if not _session_access_ok(session):
-                result["notice"] = "이 보관함에 대한 접근 권한이 없습니다."
+                result["notice"] = _T("이 보관함에 대한 접근 권한이 없습니다.", "You do not have access to this library.")
                 return result
             perms = _user_plugin_perms(user_id, force_refresh=True)
             if not _user_can_use_plugin(viewer, SELF_ID, PluginHubMetadataProvider, perms):
-                result["notice"] = "플러그인 허브 사용 권한이 없습니다. 관리자에게 문의하세요."
+                result["notice"] = _T("플러그인 허브 사용 권한이 없습니다. 관리자에게 문의하세요.", "You do not have permission to use the plugin hub. Ask an administrator.")
                 return result
 
         discovered = _discover_viewer_classes()
+        if is_admin:
+            try:
+                self._sync_problem_cards()
+            except Exception:
+                pass
 
         # 탭 목록: 정지된 플러그인 / 이 사용자에게 허용되지 않은 플러그인은 제외
         tabs = []

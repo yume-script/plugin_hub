@@ -179,7 +179,7 @@
 }
 
 .pv-lane-body.pv-lane-empty::before {
-  content: "표시된 플러그인 없음";
+  content: attr(data-empty); /* settings.js가 화면 언어로 채움 (기본: 표시된 플러그인 없음) */
   font-size: 12px;
   color: var(--app-text-muted, var(--bo-text-secondary, #6b6b6b));
   padding: 6px 2px;
