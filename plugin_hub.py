@@ -79,8 +79,16 @@ _compliance_cleaned = set()
 _violation_lock = threading.Lock()
 _violations = {}          # p_id -> 사유
 _compliant_seen = set()   # 이번 실행에서 규칙을 지키는 것으로 확인한 p_id (문제 카드 닫기용)
-_problem_sync = {"at": 0.0}
-_PROBLEM_SYNC_SEC = 60.0  # 이미 저장 설정을 기본값으로 되돌린 p_id (프로세스 생애주기 동안 1회만)
+_problem_sync = {"at": 0.0, "mode": None}
+_PROBLEM_SYNC_SEC = 60.0
+# 규약 위반 알림 보낼 곳 (설정 VIOLATION_NOTICE): both = BookOasis 관리자 알림 + 허브 설정 화면 (기본),
+# screen = 허브 설정 화면에만, off = 알리지 않음 (서버 로그에는 그대로 남음)
+_NOTICE_MODES = ("both", "screen", "off")
+
+
+def _notice_mode(config):
+    raw = str((config or {}).get("VIOLATION_NOTICE") or "").strip().lower()
+    return raw if raw in _NOTICE_MODES else "both"
 
 _SESSION_LABELS = _LazyText({
     "general": ("일반", "General"),
@@ -869,18 +877,23 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
     def apply(self, db_type, book_id, item_data):
         return False, _T("플러그인 허브는 메타데이터 적용 기능을 제공하지 않습니다.", "The plugin hub does not apply metadata.")
 
-    def _sync_problem_cards(self):
+    def _sync_problem_cards(self, mode="both"):
         """가이드 규칙(클래스 id = 폴더명, VERSION 파일)을 어겨 허브에서 빠진 플러그인을 관리자 알림 문제 카드로 올리고,
-        다시 지키면 닫는다. report_problem이 없는 구버전 코어(2.8.4 미만)에서는 아무것도 하지 않는다. 1분에 한 번만."""
+        다시 지키면 닫는다. report_problem이 없는 구버전 코어(2.8.4 미만)에서는 아무것도 하지 않는다. 1분에 한 번만
+        (알림 보낼 곳 설정을 바꾸면 바로). mode가 both가 아니면 이미 올린 카드를 닫기만 한다."""
         if not hasattr(self, "report_problem") or not hasattr(self, "resolve_problem"):
             return
         now = time.time()
-        if now - _problem_sync["at"] < _PROBLEM_SYNC_SEC:
+        if now - _problem_sync["at"] < _PROBLEM_SYNC_SEC and _problem_sync["mode"] == mode:
             return
         _problem_sync["at"] = now
+        _problem_sync["mode"] = mode
         with _violation_lock:
             bad = dict(_violations)
             good = set(_compliant_seen)
+        if mode != "both":   # BookOasis 알림을 끈 상태: 올려 둔 카드도 닫는다
+            good |= set(bad)
+            bad = {}
 
         def code_of(p_id):
             return ("excluded_" + re.sub(r"[^A-Za-z0-9_.-]", "_", str(p_id)))[:64]
@@ -948,9 +961,10 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
                 return result
 
         discovered = _discover_viewer_classes()
+        notice_mode = _notice_mode(config)
         if is_admin:
             try:
-                self._sync_problem_cards()
+                self._sync_problem_cards(notice_mode)
             except Exception:
                 pass
 
@@ -1003,6 +1017,11 @@ class PluginHubMetadataProvider(BaseMetadataProvider):
         result["catalog"] = catalog
         result["orders"] = {s: _session_order(config, s) for s in _SESSION_LABELS}
         result["excluded_ids"] = str(config.get("EXCLUDED_IDS", _DEFAULT_EXCLUDED_IDS))
+        result["violation_notice"] = notice_mode
+        # 설정 화면에 보일 규약 위반 목록 (알림을 끈 상태면 비움)
+        with _violation_lock:
+            bad = sorted(_violations.items())
+        result["violations"] = [] if notice_mode == "off" else [{"id": p_id, "reason": str(reason)} for p_id, reason in bad]
         return result
 
 

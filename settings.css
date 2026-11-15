@@ -268,6 +268,41 @@
   border-color: var(--app-accent, var(--bo-accent, #7c5cff));
 }
 
+/* ---- 규약 위반 알림 ---- */
+
+.pv-notice-select {
+  max-width: 420px;
+  cursor: pointer;
+}
+
+.pv-violations {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(240, 160, 60, 0.45);
+  background: rgba(240, 160, 60, 0.08);
+  font-size: 13px;
+  color: var(--app-text-primary, var(--bo-text-primary, #fff));
+}
+
+.pv-violations[hidden] {
+  display: none;
+}
+
+.pv-violations-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.pv-violation {
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+
+.pv-violation code {
+  font-size: 12px;
+}
+
 /* ---- 화면 표시 체크박스 ---- */
 
 .pv-checkbox-row {

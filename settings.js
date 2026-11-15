@@ -370,6 +370,20 @@
     } catch (_) {}
   }
 
+  // 규약 위반 알림: 보낼 곳(VIOLATION_NOTICE)과 지금 허브에서 빠진 플러그인 목록 ("알리지 않음"이면 목록도 숨김)
+  function renderViolations(data) {
+    const sel = root.querySelector('[data-pv-role="notice-select"]');
+    const box = root.querySelector('[data-pv-role="violations"]');
+    if (sel && data.violation_notice) sel.value = data.violation_notice;
+    if (!box) return;
+    const list = Array.isArray(data.violations) ? data.violations : [];
+    box.hidden = !list.length;
+    box.innerHTML = list.length
+      ? `<div class="pv-violations-title">${esc(T('지금 규약을 어겨 허브에서 빠진 플러그인', 'Plugins now left out of the hub for breaking a rule'))} (${list.length})</div>`
+        + list.map((v) => `<div class="pv-violation"><code>${esc(v.id)}</code> — ${esc(v.reason)}</div>`).join('')
+      : '';
+  }
+
   async function load() {
     wrapSaveConfigApi();
     try {
@@ -391,6 +405,7 @@
       if (hideTitleBarInput) {
         hideTitleBarInput.checked = !!data.hide_title_bar;
       }
+      renderViolations(data);
     } catch (err) {
       console.error('[PluginHub-Settings] load error:', err);
       grid.innerHTML = T(`<div class="pv-settings-error">플러그인 목록을 불러오지 못했습니다: ${esc(err.message || '오류')}</div>`, `<div class="pv-settings-error">Could not load the plugin list: ${esc(err.message || 'error')}</div>`);
