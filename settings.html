@@ -38,6 +38,18 @@
     </p>
   </div>
   <div class="pv-excluded-wrap">
+    <h4 class="pv-lanes-heading" data-en="Plugin rule violation notices">플러그인 규약 위반 알림</h4>
+    <p class="pv-settings-desc pv-excluded-desc" data-en="When a plugin breaks the plugin guide rules (class id = folder name, a VERSION file), the hub leaves it out and it keeps its own sidebar tab. Choose where to tell you about it. The server log always keeps it.">
+      플러그인이 가이드 규약(클래스 id = 폴더명, VERSION 파일)을 어기면 허브에서 빼고 원래 사이드바 탭으로 둡니다. 그 사실을 어디로 알릴지 고릅니다. 서버 로그에는 항상 남습니다.
+    </p>
+    <select class="pv-excluded-input pv-notice-select" name="VIOLATION_NOTICE" data-pv-role="notice-select">
+      <option value="both" data-en="BookOasis admin alert + this settings screen (default)">BookOasis 관리자 알림 + 이 설정 화면 (기본)</option>
+      <option value="screen" data-en="This settings screen only">이 설정 화면에만</option>
+      <option value="off" data-en="Do not notify (server log only)">알리지 않음 (서버 로그에만)</option>
+    </select>
+    <div class="pv-violations" data-pv-role="violations" hidden></div>
+  </div>
+  <div class="pv-excluded-wrap">
     <h4 class="pv-lanes-heading" data-en="Plugins to leave out">목록에서 제외할 플러그인</h4>
     <p class="pv-settings-desc pv-excluded-desc" data-en-html="Plugin IDs separated by commas. Plugins listed here never appear in the hub's cards or tab candidates. The default is &lt;code&gt;bookoasis_plugins_viewer&lt;/code&gt; (plugin viewer) — so another combined viewer does not end up inside the hub.">
       쉼표(,)로 구분한 플러그인 고유 ID. 여기 적힌 플러그인은 허브의 카드 목록/탭 후보에 아예 나타나지 않습니다.
